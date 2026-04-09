@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Dashboard</title>
+    <style>
+        :root {
+            --bg:      #0d1117;
+            --card:    #161b22;
+            --card2:   #1c2128;
+            --border:  #30363d;
+            --txt:     #e6edf3;
+            --muted:   #8b949e;
+            --green:   #3fb950;
+            --red:     #f85149;
+            --yellow:  #d29922;
+            --blue:    #58a6ff;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--txt);
+            min-height: 100vh;
+        }
+
+        /* ── Header ─────────────────────────────── */
+        header {
+            padding: 13px 28px;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: sticky; top: 0; z-index: 200;
+        }
+        header h1 { font-size: 17px; font-weight: 700; }
+        .live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(63,185,80,.5); }
+            50%      { opacity:.6; box-shadow:0 0 0 5px rgba(63,185,80,0); }
+        }
+        #utc-clock { margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+        /* ── Page container ─────────────────────── */
+        .container { padding: 24px 28px; max-width: 1800px; margin: 0 auto; }
+
+        /* ── Section title ──────────────────────── */
+        .sec-title {
+            font-size: 14px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .8px; color: var(--muted);
+            margin-bottom: 14px;
+        }
+
+        /* ══════════════════════════════════════════
+           MARKETS  –  3 cols, chart + timer inline
+           ══════════════════════════════════════════ */
+        .markets-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 36px;
+        }
+
+        .mcard {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* card header */
+        .mcard-head {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .mname { display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; }
+        .flag  { font-size:18px; line-height:1; }
+
+        /* card body = chart (left) + timer panel (right) side by side */
+        .mcard-body {
+            display: flex;
+            flex: 1;
+            min-height: 260px;
+        }
+
+        .mchart {
+            flex: 1 1 0;          /* takes all available space */
+            min-width: 0;
+            position: relative;
+            border-right: 1px solid var(--border);
+        }
+        .mchart .tradingview-widget-container,
+        .mchart .tradingview-widget-container__widget {
+            position: absolute;
+            inset: 0;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .mtimer {
+            flex: 0 0 190px;      /* fixed sidebar width */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 18px 18px 18px 20px;
+            gap: 14px;
+            background: var(--card2);
+        }
+
+        .badge {
+            padding: 3px 11px; border-radius: 20px;
+            font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .5px;
+        }
+        .b-open   { background:rgba(63,185,80,.15);  color:var(--green);  border:1px solid rgba(63,185,80,.35); }
+        .b-closed { background:rgba(248,81,73,.15);  color:var(--red);    border:1px solid rgba(248,81,73,.35); }
+        .b-lunch  { background:rgba(210,153,34,.15); color:var(--yellow); border:1px solid rgba(210,153,34,.35); }
+
+        .tlabel  { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:2px; }
+        .tclock  { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:2px; }
+        .t-open  { color:var(--green); }
+        .t-closed{ color:var(--red); }
+        .t-lunch { color:var(--yellow); }
+
+        .tlocal  { font-size:11px; color:var(--muted); }
+        .tlocal span { display:block; font-size:15px; font-weight:600; color:var(--txt); font-variant-numeric:tabular-nums; }
+
+        /* ══════════════════════════════════════════
+           WATCHLIST  –  asset chips + big chart
+           ══════════════════════════════════════════ */
+        .watchlist-wrap {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .chips-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            flex-wrap: wrap;
+        }
+        .chips-bar::-webkit-scrollbar { height:4px; }
+        .chips-bar::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+        .chip {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--card2);
+            cursor: pointer;
+            transition: all .18s;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .chip:hover { border-color: var(--blue); background: rgba(88,166,255,.07); }
+        .chip.active { border-color: var(--blue); background: rgba(88,166,255,.12); }
+
+        .chip-icon { font-size: 18px; line-height: 1; }
+        .chip-info { display: flex; flex-direction: column; gap: 1px; }
+        .chip-name { font-size: 13px; font-weight: 700; }
+        .chip-sub  { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+
+        /* colored left bar per chip */
+        .chip { border-left-width: 3px; }
+        .chip-gold   { border-left-color: #f7b731; }
+        .chip-oil    { border-left-color: #a55c1b; }
+        .chip-btc    { border-left-color: #f7921a; }
+        .chip-nvda   { border-left-color: #76e85a; }
+        .chip-tsm    { border-left-color: #29b6f6; }
+        .chip-tsla   { border-left-color: #e84142; }
+
+        .chip-gold.active  { background: rgba(247,183,49,.1);  border-color:#f7b731; }
+        .chip-oil.active   { background: rgba(165,92,27,.15);  border-color:#a55c1b; }
+        .chip-btc.active   { background: rgba(247,146,26,.1);  border-color:#f7921a; }
+        .chip-nvda.active  { background: rgba(118,232,90,.08); border-color:#76e85a; }
+        .chip-tsm.active   { background: rgba(41,182,246,.1);  border-color:#29b6f6; }
+        .chip-tsla.active  { background: rgba(232,65,66,.1);   border-color:#e84142; }
+
+        #wl-chart-box {
+            height: 500px;
+            position: relative;
+        }
+        #wl-chart-inner {
+            position: absolute;
+            inset: 0;
+        }
+        #wl-chart-inner .tradingview-widget-container,
+        #wl-chart-inner .tradingview-widget-container__widget {
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="live-dot"></div>
+    <h1>Market Dashboard</h1>
+    <span id="utc-clock">UTC  --:--:--</span>
+</header>
+
+<div class="container">
+
+    <!-- ══ MARKETS ══════════════════════════════════════════════════ -->
+    <div class="sec-title">Mercados</div>
+    <div class="markets-grid">
+
+        <!-- JAPAN -->
+        <div class="mcard">
+            <div class="mcard-head">
+                <div class="mname"><span class="flag">🇯🇵</span> Nikkei 225</div>
+                <span class="badge b-closed" id="jp-badge">...</span>
+            </div>
+            <div class="mcard-body">
+                <div class="mchart">
+                    <div class="tradingview-widget-container">
+                        <div class="tradingview-widget-container__widget"></div>
+                        <script type="text/javascript"
+                                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+                        {"autosize":true,"symbol":"INDEX:NKY","interval":"15","timezone":"Asia/Tokyo",
+                         "theme":"dark","style":"1","locale":"en","hide_top_toolbar":true,
+                         "hide_legend":true,"save_image":false,"calendar":false,
+                         "support_host":"https://www.tradingview.com"}
+                        </script>
+                    </div>
+                </div>
+                <div class="mtimer">
+                    <span class="badge b-closed" id="jp-badge2" style="display:none"></span>
+                    <div>
+                        <div class="tlabel" id="jp-label">Cargando…</div>
+                        <div class="tclock t-closed" id="jp-timer">--:--:--</div>
+                    </div>
+                    <div class="tlocal">
+                        Tokio
+                        <span id="jp-local">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- UK -->
+        <div class="mcard">
+            <div class="mcard-head">
+                <div class="mname"><span class="flag">🇬🇧</span> FTSE 100</div>
+                <span class="badge b-closed" id="uk-badge">...</span>
+            </div>
+            <div class="mcard-body">
+                <div class="mchart">
+                    <div class="tradingview-widget-container">
+                        <div class="tradingview-widget-container__widget"></div>
+                        <script type="text/javascript"
+                                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+                        {"autosize":true,"symbol":"INDEX:UKX","interval":"15","timezone":"Europe/London",
+                         "theme":"dark","style":"1","locale":"en","hide_top_toolbar":true,
+                         "hide_legend":true,"save_image":false,"calendar":false,
+                         "support_host":"https://www.tradingview.com"}
+                        </script>
+                    </div>
+                </div>
+                <div class="mtimer">
+                    <div>
+                        <div class="tlabel" id="uk-label">Cargando…</div>
+                        <div class="tclock t-closed" id="uk-timer">--:--:--</div>
+                    </div>
+                    <div class="tlocal">
+                        Londres
+                        <span id="uk-local">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- US -->
+        <div class="mcard">
+            <div class="mcard-head">
+                <div class="mname"><span class="flag">🇺🇸</span> S&amp;P 500</div>
+                <span class="badge b-closed" id="us-badge">...</span>
+            </div>
+            <div class="mcard-body">
+                <div class="mchart">
+                    <div class="tradingview-widget-container">
+                        <div class="tradingview-widget-container__widget"></div>
+                        <script type="text/javascript"
+                                src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+                        {"autosize":true,"symbol":"SP:SPX","interval":"15","timezone":"America/New_York",
+                         "theme":"dark","style":"1","locale":"en","hide_top_toolbar":true,
+                         "hide_legend":true,"save_image":false,"calendar":false,
+                         "support_host":"https://www.tradingview.com"}
+                        </script>
+                    </div>
+                </div>
+                <div class="mtimer">
+                    <div>
+                        <div class="tlabel" id="us-label">Cargando…</div>
+                        <div class="tclock t-closed" id="us-timer">--:--:--</div>
+                    </div>
+                    <div class="tlocal">
+                        Nueva York
+                        <span id="us-local">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /markets-grid -->
+
+    <!-- ══ WATCHLIST ════════════════════════════════════════════════ -->
+    <div class="sec-title">Watchlist</div>
+    <div class="watchlist-wrap">
+
+        <div class="chips-bar" id="chips-bar">
+            <!-- chips are rendered by JS -->
+        </div>
+
+        <div id="wl-chart-box">
+            <div id="wl-chart-inner"></div>
+        </div>
+
+    </div>
+
+</div><!-- /container -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ══════════════════════════════════════════════════════════════ -->
+<script>
+
+// ── Watchlist assets ───────────────────────────────────────────────────────
+// Cada activo tiene: id, nombre, subtítulo, emoji, clase CSS de color, y
+// el símbolo de TradingView.
+const ASSETS = [
+    { id:'gold', name:'Oro',              sub:'Futuro · COMEX',   icon:'🥇', cls:'chip-gold', sym:'COMEX:GC1!' },
+    { id:'oil',  name:'Petróleo',         sub:'Futuro · NYMEX',   icon:'🛢️', cls:'chip-oil',  sym:'NYMEX:CL1!' },
+    { id:'btc',  name:'Bitcoin',          sub:'Crypto · Binance', icon:'₿',  cls:'chip-btc',  sym:'BINANCE:BTCUSDT' },
+    { id:'nvda', name:'NVIDIA',           sub:'Nasdaq',           icon:'🟢', cls:'chip-nvda', sym:'NASDAQ:NVDA' },
+    { id:'tsm',  name:'Taiwan Semi',      sub:'NYSE · TSM',       icon:'🔵', cls:'chip-tsm',  sym:'NYSE:TSM' },
+    { id:'tsla', name:'Tesla',            sub:'Nasdaq',           icon:'⚡', cls:'chip-tsla', sym:'NASDAQ:TSLA' },
+];
+
+let activeAsset = 'gold';
+
+// Construir chips
+const bar = document.getElementById('chips-bar');
+ASSETS.forEach(a => {
+    const btn = document.createElement('button');
+    btn.className = `chip ${a.cls}${a.id === activeAsset ? ' active' : ''}`;
+    btn.id = `chip-${a.id}`;
+    btn.innerHTML = `
+        <span class="chip-icon">${a.icon}</span>
+        <span class="chip-info">
+            <span class="chip-name">${a.name}</span>
+            <span class="chip-sub">${a.sub}</span>
+        </span>`;
+    btn.addEventListener('click', () => selectAsset(a.id, a.sym));
+    bar.appendChild(btn);
+});
+
+// ── Carga dinámica del gráfico de watchlist ────────────────────────────────
+// Teoría: Los widgets de TradingView se inicializan leyendo el textContent
+// del <script> que tiene su src. Para cambiar de activo, destruimos el
+// contenedor anterior e inyectamos un nuevo <script> con createElement().
+// Los scripts creados con createElement + appendChild SÍ se ejecutan,
+// a diferencia de los inyectados con innerHTML.
+
+function loadWatchlistChart(symbol) {
+    const inner = document.getElementById('wl-chart-inner');
+    inner.innerHTML = '';                          // destruye widget anterior
+
+    const container = document.createElement('div');
+    container.className = 'tradingview-widget-container';
+    container.style.cssText = 'height:100%;width:100%';
+
+    const widgetDiv = document.createElement('div');
+    widgetDiv.className = 'tradingview-widget-container__widget';
+    widgetDiv.style.cssText = 'height:100%;width:100%';
+    container.appendChild(widgetDiv);
+
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src  = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    // TradingView lee textContent del <script> como configuración JSON
+    script.textContent = JSON.stringify({
+        autosize: true,
+        symbol: symbol,
+        interval: "D",
+        timezone: "Etc/UTC",
+        theme: "dark",
+        style: "1",
+        locale: "en",
+        hide_top_toolbar: false,
+        hide_legend: false,
+        withdateranges: true,
+        save_image: false,
+        calendar: false,
+        support_host: "https://www.tradingview.com"
+    });
+    container.appendChild(script);
+    inner.appendChild(container);
+}
+
+function selectAsset(id, symbol) {
+    // Desactivar chip anterior
+    const prev = document.getElementById(`chip-${activeAsset}`);
+    if (prev) prev.classList.remove('active');
+
+    activeAsset = id;
+
+    // Activar nuevo chip
+    const next = document.getElementById(`chip-${id}`);
+    if (next) next.classList.add('active');
+
+    loadWatchlistChart(symbol);
+}
+
+// Carga inicial con el primer activo
+loadWatchlistChart(ASSETS.find(a => a.id === activeAsset).sym);
+
+
+// ── Market timers ──────────────────────────────────────────────────────────
+// Configuración: sesiones en minutos desde medianoche del timezone local
+// del mercado. Usamos Intl.DateTimeFormat para obtener la hora en cada
+// zona sin necesidad de calcular offsets UTC manualmente (esto maneja
+// DST automáticamente en todos los países).
+
+const MARKETS = {
+    jp: {
+        tz: 'Asia/Tokyo',
+        sessions: [
+            { open: 9*60,     close: 11*60+30 },  // 09:00–11:30
+            { open: 12*60+30, close: 15*60+30 }   // 12:30–15:30 (break almuerzo)
+        ],
+        badge: 'jp-badge', timer: 'jp-timer', label: 'jp-label', local: 'jp-local', city: 'Tokio'
+    },
+    uk: {
+        tz: 'Europe/London',
+        sessions: [{ open: 8*60, close: 16*60+30 }],   // 08:00–16:30
+        badge: 'uk-badge', timer: 'uk-timer', label: 'uk-label', local: 'uk-local', city: 'Londres'
+    },
+    us: {
+        tz: 'America/New_York',
+        sessions: [{ open: 9*60+30, close: 16*60 }],   // 09:30–16:00
+        badge: 'us-badge', timer: 'us-timer', label: 'us-label', local: 'us-local', city: 'Nueva York'
+    }
+};
+
+// Devuelve hora actual en el timezone dado, descompuesta en partes
+function clock(tz) {
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-US', {
+            timeZone: tz,
+            hour:'2-digit', minute:'2-digit', second:'2-digit',
+            weekday:'short', hour12: false
+        }).formatToParts(new Date()).map(p => [p.type, p.value])
+    );
+    const h = parseInt(parts.hour), m = parseInt(parts.minute), s = parseInt(parts.second);
+    return { h, m, s, totalSec: h*3600 + m*60 + s, weekday: parts.weekday };
+}
+
+// Formatea segundos como HH:MM:SS
+function hms(sec) {
+    if (sec < 0) sec = 0;
+    return [Math.floor(sec/3600), Math.floor(sec%3600/60), sec%60]
+        .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+// Aplica estado visual a los elementos del timer
+function setState(cfg, state, sec, labelText) {
+    const map = {
+        open:   { bc:'b-open',   tc:'t-open',   bt:'Abierto'  },
+        closed: { bc:'b-closed', tc:'t-closed', bt:'Cerrado'  },
+        lunch:  { bc:'b-lunch',  tc:'t-lunch',  bt:'Almuerzo' }
+    };
+    const s = map[state];
+    document.getElementById(cfg.badge).className = `badge ${s.bc}`;
+    document.getElementById(cfg.badge).textContent = s.bt;
+    document.getElementById(cfg.timer).className   = `tclock ${s.tc}`;
+    document.getElementById(cfg.timer).textContent = hms(sec);
+    document.getElementById(cfg.label).textContent = labelText;
+}
+
+function updateMarket(cfg) {
+    const t = clock(cfg.tz);
+
+    // Hora local en pantalla
+    document.getElementById(cfg.local).textContent =
+        [t.h, t.m, t.s].map(n => String(n).padStart(2,'0')).join(':');
+
+    // ── Fin de semana ──
+    if (t.weekday === 'Sat' || t.weekday === 'Sun') {
+        const days = t.weekday === 'Sat' ? 2 : 1;
+        const sec  = (86400 - t.totalSec) + (days-1)*86400 + cfg.sessions[0].open*60;
+        setState(cfg, 'closed', sec, 'Abre el Lunes en');
+        return;
+    }
+
+    // ── Break de almuerzo (solo Japón, 2 sesiones) ──
+    if (cfg.sessions.length > 1) {
+        const [s1, s2] = cfg.sessions;
+        if (t.totalSec >= s1.close*60 && t.totalSec < s2.open*60) {
+            setState(cfg, 'lunch', s2.open*60 - t.totalSec, 'Almuerzo – reabre en');
+            return;
+        }
+    }
+
+    // ── Dentro de sesión ──
+    for (const s of cfg.sessions) {
+        if (t.totalSec >= s.open*60 && t.totalSec < s.close*60) {
+            setState(cfg, 'open', s.close*60 - t.totalSec, 'Cierra en');
+            return;
+        }
+    }
+
+    // ── Próxima apertura hoy ──
+    for (const s of cfg.sessions) {
+        if (s.open*60 > t.totalSec) {
+            setState(cfg, 'closed', s.open*60 - t.totalSec, 'Abre en');
+            return;
+        }
+    }
+
+    // ── Abre mañana ──
+    setState(cfg, 'closed', (86400 - t.totalSec) + cfg.sessions[0].open*60, 'Abre mañana en');
+}
+
+// ── Tick global (cada segundo) ─────────────────────────────────────────────
+function tick() {
+    // UTC clock
+    const n = new Date();
+    document.getElementById('utc-clock').textContent =
+        `UTC  ${[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()]
+            .map(v=>String(v).padStart(2,'0')).join(':')}`;
+
+    // Timers
+    for (const cfg of Object.values(MARKETS)) updateMarket(cfg);
+}
+
+tick();
+setInterval(tick, 1000);
+
+</script>
+</body>
+</html>
