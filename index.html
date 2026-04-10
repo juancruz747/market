@@ -271,7 +271,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════════════════
-const TOKEN = 'd7cg5tpr01qv03es8ap0d7cg5tpr01qv03es8apg';
+// ⚠️  Si ves "Error al cargar datos", abrí finnhub.io/dashboard y pegá tu token aquí.
+// Los tokens de Finnhub tienen EXACTAMENTE 20 caracteres alfanuméricos.
+const TOKEN = 'd7cg5tpr01qv03es8ap0';
 const nowSec = () => Math.floor(Date.now() / 1000);
 const sleep  = ms => new Promise(r => setTimeout(r, ms));
 
@@ -331,6 +333,10 @@ const ASSETS = [
 // Manejo de errores: si falla el fetch (CORS en file://, red, etc) retorna []
 // y el overlay se queda visible con el mensaje de error para que el usuario sepa.
 
+// fetchCandles devuelve:
+//   { ok: true,  data: [{time,open,high,low,close}, …] }  → éxito con velas
+//   { ok: true,  data: [] }                               → sin datos para el período
+//   { ok: false, error: "mensaje" }                       → fallo de red o HTTP error
 async function fetchCandles(sym, apiType, resolution, fromTs, toTs) {
     const ep = apiType === 'crypto' ? 'crypto/candle'
              : apiType === 'forex'  ? 'forex/candle'
@@ -342,21 +348,31 @@ async function fetchCandles(sym, apiType, resolution, fromTs, toTs) {
               + `&from=${fromTs}&to=${toTs}`
               + `&token=${TOKEN}`;
 
-    console.log(`[API] Fetching ${sym} @ ${resolution}…`, url);
+    console.log(`[API] ${sym} @ ${resolution}`, url);
 
     try {
         const resp = await fetch(url);
+        const body = await resp.text();
+        let d;
+        try { d = JSON.parse(body); } catch { d = {}; }
+
         if (!resp.ok) {
-            console.error(`[API] HTTP ${resp.status} for ${sym}`);
-            return null;  // null = error (distinto de [] = no data)
+            const msg = d.error || body.slice(0, 120) || `HTTP ${resp.status}`;
+            console.error(`[API] Error ${resp.status} for ${sym}:`, msg);
+            return { ok: false, error: `HTTP ${resp.status} — ${msg}` };
         }
-        const d = await resp.json();
-        console.log(`[API] ${sym}: status="${d.s}", points=${d.t?.length ?? 0}`);
-        if (d.s !== 'ok') return [];
-        return d.t.map((t, i) => ({ time: t, open: d.o[i], high: d.h[i], low: d.l[i], close: d.c[i] }));
+
+        console.log(`[API] ${sym}: s="${d.s}", puntos=${d.t?.length ?? 0}`);
+
+        if (d.s !== 'ok') {
+            return { ok: true, data: [] };   // sin datos (feriado, fuera de horario, etc.)
+        }
+        const data = d.t.map((t, i) => ({ time: t, open: d.o[i], high: d.h[i], low: d.l[i], close: d.c[i] }));
+        return { ok: true, data };
+
     } catch (e) {
-        console.error(`[API] fetch error for ${sym}:`, e.message);
-        return null;  // null = error de red / CORS
+        console.error(`[API] fetch exception for ${sym}:`, e.message);
+        return { ok: false, error: `Red / CORS — ${e.message}` };
     }
 }
 
@@ -506,24 +522,27 @@ function hideOverlay(id) {
 // ctx: objeto mkt o wl
 // overlayId: id del div overlay
 async function loadChart(ctx, overlayId) {
-    const tf = TIMEFRAMES[ctx.tf];
+    const tf   = TIMEFRAMES[ctx.tf];
     const from = nowSec() - tf.fromDays * 86400;
-    showOverlay(overlayId, 'Cargando datos…');
+    showOverlay(overlayId, `Cargando ${ctx.activeSym} @ ${ctx.tf}…`);
 
-    const candles = await fetchCandles(ctx.activeSym, ctx.apiType, tf.res, from, nowSec());
+    const result = await fetchCandles(ctx.activeSym, ctx.apiType, tf.res, from, nowSec());
 
-    if (candles === null) {
-        showOverlay(overlayId, 'Error al cargar datos', true);
+    if (!result.ok) {
+        // Error de red o HTTP — mostramos el mensaje exacto para poder diagnosticar
+        showOverlay(overlayId, `Error: ${result.error}`, true);
         return;
     }
-    if (candles.length === 0) {
-        showOverlay(overlayId, 'Sin datos para el período seleccionado');
+    if (result.data.length === 0) {
+        // La API respondió OK pero no hay velas para ese período
+        // (puede ser feriado, símbolo fuera de horario, o plan insuficiente)
+        showOverlay(overlayId, `Sin datos para ${ctx.activeSym} en los últimos ${tf.fromDays} días`);
         return;
     }
 
-    ctx.series.setData(candles);
+    ctx.series.setData(result.data);
     ctx.chart.timeScale().fitContent();
-    ctx.lastBar = candles[candles.length - 1];
+    ctx.lastBar = result.data[result.data.length - 1];
     hideOverlay(overlayId);
 }
 
