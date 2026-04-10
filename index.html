@@ -4,323 +4,261 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Market Dashboard</title>
-
-    <!--
-        Lightweight Charts — librería open-source de TradingView (MIT License)
-        https://github.com/tradingview/lightweight-charts
-        Esto reemplaza los widgets embebidos que tenían 15 min de delay.
-        El delay era una restricción de licencia de las bolsas al redistribuir
-        datos, no un límite técnico de la librería de charting.
-    -->
     <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-
     <style>
         :root {
-            --bg:      #0d1117;
-            --card:    #161b22;
-            --card2:   #1c2128;
-            --border:  #30363d;
-            --txt:     #e6edf3;
-            --muted:   #8b949e;
-            --green:   #3fb950;
-            --red:     #f85149;
-            --yellow:  #d29922;
-            --blue:    #58a6ff;
+            --bg:     #0d1117;
+            --card:   #161b22;
+            --card2:  #1c2128;
+            --border: #30363d;
+            --txt:    #e6edf3;
+            --muted:  #8b949e;
+            --green:  #3fb950;
+            --red:    #f85149;
+            --yellow: #d29922;
+            --blue:   #58a6ff;
         }
         * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--txt); min-height:100vh; }
 
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: var(--bg);
-            color: var(--txt);
-            min-height: 100vh;
-        }
-
-        /* ── Header ─────────────────────────────── */
+        /* ── Header ─────────────────────────────────────────── */
         header {
-            padding: 13px 28px;
+            padding: 11px 24px;
             background: var(--card);
             border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            position: sticky; top: 0; z-index: 200;
+            display: flex; align-items: center; gap: 10px;
+            position: sticky; top:0; z-index:200;
         }
-        header h1 { font-size: 17px; font-weight: 700; }
-        .live-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: var(--green);
-            animation: pulse 2s infinite;
-        }
+        .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
         @keyframes pulse {
-            0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(63,185,80,.5); }
-            50%      { opacity:.6; box-shadow:0 0 0 5px rgba(63,185,80,0); }
+            0%,100%{ opacity:1; box-shadow:0 0 0 0 rgba(63,185,80,.5); }
+            50%    { opacity:.6; box-shadow:0 0 0 5px rgba(63,185,80,0); }
         }
-        #ws-status { font-size: 10px; color: var(--muted); }
-        #utc-clock { margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+        header h1    { font-size:16px; font-weight:700; }
+        #ws-dot      { font-size:11px; color:var(--muted); }
+        #utc-clock   { margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 
-        /* ── Page container ─────────────────────── */
-        .container { padding: 24px 28px; max-width: 1800px; margin: 0 auto; }
-
-        /* ── Section title ──────────────────────── */
-        .sec-title {
-            font-size: 14px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .8px; color: var(--muted);
-            margin-bottom: 14px;
+        /* ── File:// warning ─────────────────────────────────── */
+        #local-warn {
+            display:none;
+            background:rgba(210,153,34,.12); border-bottom:1px solid rgba(210,153,34,.3);
+            padding:8px 24px; font-size:12px; color:var(--yellow);
         }
 
-        /* ══════════════════════════════════════════
-           MARKETS — 3 cols, chart + timer inline
-           ══════════════════════════════════════════ */
-        .markets-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 36px;
+        /* ── Page ────────────────────────────────────────────── */
+        .container { padding:20px 24px; max-width:1800px; margin:0 auto; display:flex; flex-direction:column; gap:20px; }
+
+        /* ── Timer Row ───────────────────────────────────────── */
+        .timers-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+
+        .tcard {
+            background:var(--card); border:1px solid var(--border); border-radius:12px;
+            padding:14px 18px;
+            display:grid;
+            grid-template-columns: auto 1px 1fr 1px auto;
+            align-items:center; gap:16px;
         }
+        .tcard-flag-name { display:flex; align-items:center; gap:10px; }
+        .tcard-flag      { font-size:22px; line-height:1; }
+        .tcard-name      { font-size:13px; font-weight:700; line-height:1.3; }
+        .tcard-sub       { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+        .tcard-sep       { width:1px; height:36px; background:var(--border); }
+        .tcard-mid       { display:flex; flex-direction:column; gap:3px; }
+        .tcard-mid .tlabel { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+        .tcard-mid .tclock { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:2px; }
+        .tcard-right     { display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+        .tcard-right .tcity   { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+        .tcard-right .tlocal  { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
 
-        .mcard {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
+        .badge { padding:2px 10px; border-radius:20px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+        .b-open   { background:rgba(63,185,80,.15);  color:var(--green);  border:1px solid rgba(63,185,80,.3);  }
+        .b-closed { background:rgba(248,81,73,.15);  color:var(--red);    border:1px solid rgba(248,81,73,.3);  }
+        .b-lunch  { background:rgba(210,153,34,.15); color:var(--yellow); border:1px solid rgba(210,153,34,.3); }
+        .t-open   { color:var(--green); }
+        .t-closed { color:var(--red);   }
+        .t-lunch  { color:var(--yellow);}
+
+        /* ── Chart Sections ─────────────────────────────────── */
+        .chart-section {
+            background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden;
         }
-
-        .mcard-head {
-            padding: 10px 16px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-shrink: 0;
+        .chart-head {
+            padding:12px 16px;
+            border-bottom:1px solid var(--border);
+            display:flex; align-items:center; gap:10px; flex-wrap:wrap;
         }
-        .mname { display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; }
-        .flag  { font-size:18px; line-height:1; }
+        .chart-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin-right:4px; }
 
-        .mcard-body {
-            display: flex;
-            flex: 1;
-            min-height: 260px;
+        /* Selector buttons (mercados y activos) */
+        .sel-btn {
+            display:flex; align-items:center; gap:6px;
+            padding:6px 14px; border-radius:8px;
+            border:1px solid var(--border); background:var(--card2);
+            cursor:pointer; transition:all .15s; white-space:nowrap; user-select:none;
+            font-size:12px; font-weight:600; color:var(--txt);
         }
+        .sel-btn:hover  { border-color:var(--blue); background:rgba(88,166,255,.07); }
+        .sel-btn.active { border-color:var(--blue); background:rgba(88,166,255,.13); }
+        .sel-btn .sflag { font-size:15px; line-height:1; }
 
-        .mchart {
-            flex: 1 1 0;
-            min-width: 0;
-            position: relative;
-            border-right: 1px solid var(--border);
+        /* Colored left border per asset */
+        .sel-btn { border-left-width:3px; }
+        .sc-jp   { border-left-color:#ff6b6b; }  .sc-jp.active  { background:rgba(255,107,107,.08); border-color:#ff6b6b; }
+        .sc-uk   { border-left-color:#4d9fff; }  .sc-uk.active  { background:rgba(77,159,255,.08);  border-color:#4d9fff; }
+        .sc-us   { border-left-color:#50fa7b; }  .sc-us.active  { background:rgba(80,250,123,.08);  border-color:#50fa7b; }
+        .sc-gold { border-left-color:#f7b731; }  .sc-gold.active{ background:rgba(247,183,49,.1);   border-color:#f7b731; }
+        .sc-oil  { border-left-color:#a55c1b; }  .sc-oil.active { background:rgba(165,92,27,.12);   border-color:#a55c1b; }
+        .sc-btc  { border-left-color:#f7921a; }  .sc-btc.active { background:rgba(247,146,26,.1);   border-color:#f7921a; }
+        .sc-nvda { border-left-color:#76e85a; }  .sc-nvda.active{ background:rgba(118,232,90,.08);  border-color:#76e85a; }
+        .sc-tsm  { border-left-color:#29b6f6; }  .sc-tsm.active { background:rgba(41,182,246,.1);   border-color:#29b6f6; }
+        .sc-tsla { border-left-color:#e84142; }  .sc-tsla.active{ background:rgba(232,65,66,.1);    border-color:#e84142; }
+
+        /* Timeframe buttons */
+        .tf-group { display:flex; gap:4px; margin-left:auto; }
+        .tf-btn {
+            padding:5px 11px; border-radius:6px;
+            border:1px solid var(--border); background:transparent;
+            color:var(--muted); font-size:11px; font-weight:700;
+            cursor:pointer; transition:all .15s;
         }
+        .tf-btn:hover  { border-color:var(--blue); color:var(--txt); }
+        .tf-btn.active { border-color:var(--blue); background:rgba(88,166,255,.12); color:var(--blue); }
 
-        /* Contenedor absoluto para Lightweight Charts */
-        .mchart-inner {
-            position: absolute;
-            inset: 0;
+        /* Chart body */
+        .chart-body { position:relative; height:460px; }
+        #wl-chart-body { height:510px; }
+
+        .chart-inner {
+            position:absolute; inset:0;
         }
-
-        /* Etiqueta sutil que indica el ETF usado como proxy */
-        .proxy-tag {
-            position: absolute;
-            bottom: 6px; left: 8px;
-            font-size: 9px; font-weight: 600;
-            color: var(--muted); opacity: .5;
-            z-index: 10; pointer-events: none;
-            text-transform: uppercase; letter-spacing: .5px;
+        .chart-overlay {
+            position:absolute; inset:0;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            gap:8px; font-size:13px; color:var(--muted);
+            background:var(--card);
+            z-index:10;
         }
-
-        .chart-loading {
-            position: absolute;
-            inset: 0;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 11px; color: var(--muted);
-            background: var(--card);
-            z-index: 8;
-        }
-
-        .mtimer {
-            flex: 0 0 190px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 18px 18px 18px 20px;
-            gap: 14px;
-            background: var(--card2);
-        }
-
-        .badge {
-            padding: 3px 11px; border-radius: 20px;
-            font-size: 11px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .5px;
-        }
-        .b-open   { background:rgba(63,185,80,.15);  color:var(--green);  border:1px solid rgba(63,185,80,.35); }
-        .b-closed { background:rgba(248,81,73,.15);  color:var(--red);    border:1px solid rgba(248,81,73,.35); }
-        .b-lunch  { background:rgba(210,153,34,.15); color:var(--yellow); border:1px solid rgba(210,153,34,.35); }
-
-        .tlabel  { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:2px; }
-        .tclock  { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:2px; }
-        .t-open  { color:var(--green); }
-        .t-closed{ color:var(--red); }
-        .t-lunch { color:var(--yellow); }
-
-        .tlocal  { font-size:11px; color:var(--muted); }
-        .tlocal span { display:block; font-size:15px; font-weight:600; color:var(--txt); font-variant-numeric:tabular-nums; }
-
-        /* ══════════════════════════════════════════
-           WATCHLIST — chips + gráfico grande
-           ══════════════════════════════════════════ */
-        .watchlist-wrap {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            overflow: hidden;
-        }
-
-        .chips-bar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 14px 18px;
-            border-bottom: 1px solid var(--border);
-            overflow-x: auto;
-            flex-wrap: wrap;
-        }
-        .chips-bar::-webkit-scrollbar { height:4px; }
-        .chips-bar::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
-
-        .chip {
-            display: flex; align-items: center; gap: 7px;
-            padding: 8px 16px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--card2);
-            cursor: pointer;
-            transition: all .18s;
-            white-space: nowrap;
-            user-select: none;
-        }
-        .chip:hover  { border-color: var(--blue); background: rgba(88,166,255,.07); }
-        .chip.active { border-color: var(--blue); background: rgba(88,166,255,.12); }
-
-        .chip-icon { font-size: 18px; line-height: 1; }
-        .chip-info { display: flex; flex-direction: column; gap: 1px; }
-        .chip-name { font-size: 13px; font-weight: 700; }
-        .chip-sub  { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
-
-        .chip { border-left-width: 3px; }
-        .chip-gold  { border-left-color: #f7b731; }
-        .chip-oil   { border-left-color: #a55c1b; }
-        .chip-btc   { border-left-color: #f7921a; }
-        .chip-nvda  { border-left-color: #76e85a; }
-        .chip-tsm   { border-left-color: #29b6f6; }
-        .chip-tsla  { border-left-color: #e84142; }
-
-        .chip-gold.active  { background: rgba(247,183,49,.1);  border-color:#f7b731; }
-        .chip-oil.active   { background: rgba(165,92,27,.15);  border-color:#a55c1b; }
-        .chip-btc.active   { background: rgba(247,146,26,.1);  border-color:#f7921a; }
-        .chip-nvda.active  { background: rgba(118,232,90,.08); border-color:#76e85a; }
-        .chip-tsm.active   { background: rgba(41,182,246,.1);  border-color:#29b6f6; }
-        .chip-tsla.active  { background: rgba(232,65,66,.1);   border-color:#e84142; }
-
-        #wl-chart-box {
-            height: 500px;
-            position: relative;
-        }
-        #wl-chart-inner {
-            position: absolute;
-            inset: 0;
-        }
+        .chart-overlay.hidden { display:none; }
+        .chart-overlay .err-icon { font-size:28px; }
+        .chart-overlay .err-msg  { font-size:12px; color:var(--muted); max-width:320px; text-align:center; line-height:1.5; }
     </style>
 </head>
 <body>
 
+<!-- ── Header ──────────────────────────────────────────────────────── -->
 <header>
     <div class="live-dot"></div>
     <h1>Market Dashboard</h1>
-    <span id="ws-status">conectando…</span>
-    <span id="utc-clock">UTC  --:--:--</span>
+    <span id="ws-dot">conectando…</span>
+    <span id="utc-clock">UTC --:--:--</span>
 </header>
+
+<!-- ── file:// warning ──────────────────────────────────────────────── -->
+<div id="local-warn">
+    ⚠️ Estás abriendo el archivo localmente (<code>file://</code>).
+    El navegador puede bloquear las llamadas a la API por CORS.
+    <strong>Sube el archivo a GitHub Pages para que funcione correctamente.</strong>
+</div>
 
 <div class="container">
 
-    <!-- ══ MARKETS ══════════════════════════════════════════════════ -->
-    <div class="sec-title">Mercados</div>
-    <div class="markets-grid">
+    <!-- ══ TIMERS ══════════════════════════════════════════════════════ -->
+    <div class="timers-row">
 
         <!-- JAPAN -->
-        <div class="mcard">
-            <div class="mcard-head">
-                <div class="mname"><span class="flag">🇯🇵</span> Nikkei 225</div>
-                <span class="badge b-closed" id="jp-badge">...</span>
+        <div class="tcard">
+            <div class="tcard-flag-name">
+                <span class="tcard-flag">🇯🇵</span>
+                <div>
+                    <div class="tcard-name">Nikkei 225</div>
+                    <span class="badge b-closed" id="jp-badge">...</span>
+                </div>
             </div>
-            <div class="mcard-body">
-                <div class="mchart">
-                    <div class="mchart-inner" id="chart-jp"></div>
-                    <div class="chart-loading"  id="load-jp">Cargando…</div>
-                    <div class="proxy-tag">EWJ proxy</div>
-                </div>
-                <div class="mtimer">
-                    <div>
-                        <div class="tlabel" id="jp-label">Cargando…</div>
-                        <div class="tclock t-closed" id="jp-timer">--:--:--</div>
-                    </div>
-                    <div class="tlocal">Tokio<span id="jp-local">--:--:--</span></div>
-                </div>
+            <div class="tcard-sep"></div>
+            <div class="tcard-mid">
+                <span class="tlabel" id="jp-label">Cargando</span>
+                <span class="tclock t-closed" id="jp-timer">--:--:--</span>
+            </div>
+            <div class="tcard-sep"></div>
+            <div class="tcard-right">
+                <span class="tcity">Tokio</span>
+                <span class="tlocal" id="jp-local">--:--:--</span>
             </div>
         </div>
 
         <!-- UK -->
-        <div class="mcard">
-            <div class="mcard-head">
-                <div class="mname"><span class="flag">🇬🇧</span> FTSE 100</div>
-                <span class="badge b-closed" id="uk-badge">...</span>
+        <div class="tcard">
+            <div class="tcard-flag-name">
+                <span class="tcard-flag">🇬🇧</span>
+                <div>
+                    <div class="tcard-name">FTSE 100</div>
+                    <span class="badge b-closed" id="uk-badge">...</span>
+                </div>
             </div>
-            <div class="mcard-body">
-                <div class="mchart">
-                    <div class="mchart-inner" id="chart-uk"></div>
-                    <div class="chart-loading"  id="load-uk">Cargando…</div>
-                    <div class="proxy-tag">EWU proxy</div>
-                </div>
-                <div class="mtimer">
-                    <div>
-                        <div class="tlabel" id="uk-label">Cargando…</div>
-                        <div class="tclock t-closed" id="uk-timer">--:--:--</div>
-                    </div>
-                    <div class="tlocal">Londres<span id="uk-local">--:--:--</span></div>
-                </div>
+            <div class="tcard-sep"></div>
+            <div class="tcard-mid">
+                <span class="tlabel" id="uk-label">Cargando</span>
+                <span class="tclock t-closed" id="uk-timer">--:--:--</span>
+            </div>
+            <div class="tcard-sep"></div>
+            <div class="tcard-right">
+                <span class="tcity">Londres</span>
+                <span class="tlocal" id="uk-local">--:--:--</span>
             </div>
         </div>
 
         <!-- US -->
-        <div class="mcard">
-            <div class="mcard-head">
-                <div class="mname"><span class="flag">🇺🇸</span> S&amp;P 500</div>
-                <span class="badge b-closed" id="us-badge">...</span>
+        <div class="tcard">
+            <div class="tcard-flag-name">
+                <span class="tcard-flag">🇺🇸</span>
+                <div>
+                    <div class="tcard-name">S&amp;P 500</div>
+                    <span class="badge b-closed" id="us-badge">...</span>
+                </div>
             </div>
-            <div class="mcard-body">
-                <div class="mchart">
-                    <div class="mchart-inner" id="chart-us"></div>
-                    <div class="chart-loading"  id="load-us">Cargando…</div>
-                    <div class="proxy-tag">SPY proxy</div>
-                </div>
-                <div class="mtimer">
-                    <div>
-                        <div class="tlabel" id="us-label">Cargando…</div>
-                        <div class="tclock t-closed" id="us-timer">--:--:--</div>
-                    </div>
-                    <div class="tlocal">Nueva York<span id="us-local">--:--:--</span></div>
-                </div>
+            <div class="tcard-sep"></div>
+            <div class="tcard-mid">
+                <span class="tlabel" id="us-label">Cargando</span>
+                <span class="tclock t-closed" id="us-timer">--:--:--</span>
+            </div>
+            <div class="tcard-sep"></div>
+            <div class="tcard-right">
+                <span class="tcity">Nueva York</span>
+                <span class="tlocal" id="us-local">--:--:--</span>
             </div>
         </div>
 
-    </div><!-- /markets-grid -->
+    </div><!-- /timers-row -->
 
-    <!-- ══ WATCHLIST ════════════════════════════════════════════════ -->
-    <div class="sec-title">Watchlist</div>
-    <div class="watchlist-wrap">
-        <div class="chips-bar" id="chips-bar"></div>
-        <div id="wl-chart-box">
-            <div id="wl-chart-inner"></div>
+    <!-- ══ MARKET CHART ════════════════════════════════════════════════ -->
+    <div class="chart-section">
+        <div class="chart-head">
+            <span class="chart-title">Mercados</span>
+            <div id="mkt-selectors"><!-- renderizado por JS --></div>
+            <div class="tf-group" id="mkt-tf"><!-- renderizado por JS --></div>
+        </div>
+        <div class="chart-body">
+            <div class="chart-inner" id="mkt-chart-inner"></div>
+            <div class="chart-overlay" id="mkt-overlay">
+                <span class="err-icon">📈</span>
+                <span>Cargando datos…</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ WATCHLIST CHART ═════════════════════════════════════════════ -->
+    <div class="chart-section">
+        <div class="chart-head">
+            <span class="chart-title">Watchlist</span>
+            <div id="wl-selectors"><!-- renderizado por JS --></div>
+            <div class="tf-group" id="wl-tf"><!-- renderizado por JS --></div>
+        </div>
+        <div class="chart-body" id="wl-chart-body">
+            <div class="chart-inner" id="wl-chart-inner"></div>
+            <div class="chart-overlay" id="wl-overlay">
+                <span class="err-icon">📈</span>
+                <span>Cargando datos…</span>
+            </div>
         </div>
     </div>
 
@@ -330,117 +268,68 @@
      JAVASCRIPT
      ══════════════════════════════════════════════════════════════════ -->
 <script>
-// ═══════════════════════════════════════════════════════════════════════════════
-// MARKET DASHBOARD — Real-Time Edition
-// Datos:     Finnhub.io (REST + WebSocket), gratuito con API key
-// Gráficos:  TradingView Lightweight Charts (open source, MIT)
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════════════
 const TOKEN = 'd7cg5tpr01qv03es8ap0d7cg5tpr01qv03es8apg';
+const nowSec = () => Math.floor(Date.now() / 1000);
+const sleep  = ms => new Promise(r => setTimeout(r, ms));
 
-// Helpers básicos
-const nowSec  = () => Math.floor(Date.now() / 1000);
-const sleep   = ms => new Promise(r => setTimeout(r, ms));
+// Mostrar aviso si se abre como file://
+if (location.protocol === 'file:') {
+    document.getElementById('local-warn').style.display = 'block';
+}
 
-// ── Configuración visual de Lightweight Charts (dark theme) ───────────────────
-const CHART_BASE = {
-    autoSize: true,                         // llena automáticamente su contenedor
-    layout: {
-        background: { type: 'solid', color: '#161b22' },
-        textColor: '#e6edf3',
-    },
-    grid: {
-        vertLines: { color: '#21262d' },
-        horzLines: { color: '#21262d' },
-    },
-    rightPriceScale: {
-        borderColor: '#30363d',
-        scaleMargins: { top: 0.1, bottom: 0.1 },
-    },
-    timeScale: {
-        borderColor: '#30363d',
-        timeVisible: true,
-        secondsVisible: false,
-    },
-    crosshair: { mode: 1 },                 // 1 = Normal (muestra precio en cursor)
+// ── Timeframes disponibles ────────────────────────────────────────────────
+// resolution: string que usa la API de Finnhub
+// fromDays: cuántos días hacia atrás pedir (amplio para no perder días feriados)
+// intervalMin: duración de cada vela en minutos (para el tick aggregation del WS)
+const TIMEFRAMES = {
+    '1m':  { res: '1',  fromDays: 7,  intervalMin: 1   },
+    '5m':  { res: '5',  fromDays: 10, intervalMin: 5   },
+    '30m': { res: '30', fromDays: 20, intervalMin: 30  },
+    '1h':  { res: '60', fromDays: 40, intervalMin: 60  },
 };
 
-// Colores verde/rojo para las velas
-const CANDLE_COLORS = {
-    upColor:         '#3fb950',
-    downColor:       '#f85149',
-    borderUpColor:   '#3fb950',
-    borderDownColor: '#f85149',
-    wickUpColor:     '#3fb950',
-    wickDownColor:   '#f85149',
-};
-
-// ── Mercados (índices → ETFs como proxy) ──────────────────────────────────────
-//
-// Problema original: los widgets embebidos de TradingView tienen 15 min de delay
-// para datos de bolsas reguladas (NYSE, LSE, TSE) porque las bolsas cobran por
-// redistribuir datos en tiempo real.
-//
-// Solución: usamos ETFs americanos listados en NYSE Arca como proxies.
-// Estos ETFs replican el índice con correlación >99% y sus datos están
-// disponibles en tiempo real vía Finnhub sin costo de licencia de bolsa.
-//   • EWJ  → iShares MSCI Japan ETF      (≈ Nikkei 225)
-//   • EWU  → iShares MSCI United Kingdom (≈ FTSE 100)
-//   • SPY  → SPDR S&P 500 ETF            (≈ S&P 500 exacto)
-//
-// Nota: los precios nominales de los ETFs son distintos a los índices
-// (EWJ ≈ $60, no 35.000), pero los movimientos porcentuales son idénticos.
-
+// ── Definición de mercados (para el timer Y el gráfico) ───────────────────
+// sym: ETF americano que replica el índice, disponible en Finnhub gratis
 const MARKETS = [
     {
-        id: 'jp', flag: '🇯🇵', name: 'Nikkei 225',
-        sym: 'EWJ',
-        tz: 'Asia/Tokyo', city: 'Tokio',
-        sessions: [
-            { open: 9*60,     close: 11*60+30 },   // 09:00–11:30
-            { open: 12*60+30, close: 15*60+30 },   // 12:30–15:30
-        ],
+        id:'jp', flag:'🇯🇵', name:'Nikkei',  sym:'EWJ', cls:'sc-jp',
+        tz:'Asia/Tokyo', city:'Tokio',
+        sessions:[{open:9*60,close:11*60+30},{open:12*60+30,close:15*60+30}],
     },
     {
-        id: 'uk', flag: '🇬🇧', name: 'FTSE 100',
-        sym: 'EWU',
-        tz: 'Europe/London', city: 'Londres',
-        sessions: [{ open: 8*60, close: 16*60+30 }],
+        id:'uk', flag:'🇬🇧', name:'FTSE',    sym:'EWU', cls:'sc-uk',
+        tz:'Europe/London', city:'Londres',
+        sessions:[{open:8*60,close:16*60+30}],
     },
     {
-        id: 'us', flag: '🇺🇸', name: 'S&P 500',
-        sym: 'SPY',
-        tz: 'America/New_York', city: 'Nueva York',
-        sessions: [{ open: 9*60+30, close: 16*60 }],
+        id:'us', flag:'🇺🇸', name:'S&P 500', sym:'SPY', cls:'sc-us',
+        tz:'America/New_York', city:'Nueva York',
+        sessions:[{open:9*60+30,close:16*60}],
     },
 ];
 
-// ── Activos del watchlist ─────────────────────────────────────────────────────
-// apiType determina qué endpoint de Finnhub usar para las velas históricas:
-//   'stock'  → /stock/candle   (acciones y ETFs)
-//   'crypto' → /crypto/candle  (criptomonedas)
-//   'forex'  → /forex/candle   (divisas, metales spot)
-
+// ── Activos de la watchlist ───────────────────────────────────────────────
 const ASSETS = [
-    { id:'gold', sym:'GLD',             apiType:'stock',  name:'Oro',         sub:'GLD · SPDR Gold',  icon:'🥇', cls:'chip-gold' },
-    { id:'oil',  sym:'USO',             apiType:'stock',  name:'Petróleo',    sub:'USO · ETF WTI',    icon:'🛢️', cls:'chip-oil'  },
-    { id:'btc',  sym:'BINANCE:BTCUSDT', apiType:'crypto', name:'Bitcoin',     sub:'Crypto · Binance', icon:'₿',  cls:'chip-btc'  },
-    { id:'nvda', sym:'NVDA',            apiType:'stock',  name:'NVIDIA',      sub:'Nasdaq',           icon:'🟢', cls:'chip-nvda' },
-    { id:'tsm',  sym:'TSM',             apiType:'stock',  name:'Taiwan Semi', sub:'NYSE · TSM',       icon:'🔵', cls:'chip-tsm'  },
-    { id:'tsla', sym:'TSLA',            apiType:'stock',  name:'Tesla',       sub:'Nasdaq',           icon:'⚡', cls:'chip-tsla' },
+    { id:'gold', sym:'GLD',             apiType:'stock',  name:'Oro',       icon:'🥇', cls:'sc-gold' },
+    { id:'oil',  sym:'USO',             apiType:'stock',  name:'Petróleo',  icon:'🛢️', cls:'sc-oil'  },
+    { id:'btc',  sym:'BINANCE:BTCUSDT', apiType:'crypto', name:'Bitcoin',   icon:'₿',  cls:'sc-btc'  },
+    { id:'nvda', sym:'NVDA',            apiType:'stock',  name:'NVIDIA',    icon:'🟢', cls:'sc-nvda' },
+    { id:'tsm',  sym:'TSM',             apiType:'stock',  name:'Taiwan Semi',icon:'🔵',cls:'sc-tsm'  },
+    { id:'tsla', sym:'TSLA',            apiType:'stock',  name:'Tesla',     icon:'⚡', cls:'sc-tsla' },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CAPA DE DATOS — Finnhub REST
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// FINNHUB REST
+// ═══════════════════════════════════════════════════════════════════════════
+// Finnhub devuelve arrays paralelos: t(timestamps), o, h, l, c, v.
+// Los convertimos al formato de Lightweight Charts: {time, open, high, low, close}.
+// time debe ser Unix segundos — Finnhub ya lo da en ese formato para intraday.
 //
-// Finnhub devuelve velas con arrays paralelos:
-//   t[] → timestamps Unix (segundos) · o[], h[], l[], c[] · v[]
-//
-// Lightweight Charts espera objetos { time, open, high, low, close }
-// donde time también es Unix segundos. La conversión es directa.
-//
-// Rate limit plan gratuito: 60 llamadas/minuto → escalonamos con sleep(400ms).
+// Manejo de errores: si falla el fetch (CORS en file://, red, etc) retorna []
+// y el overlay se queda visible con el mensaje de error para que el usuario sepa.
 
 async function fetchCandles(sym, apiType, resolution, fromTs, toTs) {
     const ep = apiType === 'crypto' ? 'crypto/candle'
@@ -452,339 +341,337 @@ async function fetchCandles(sym, apiType, resolution, fromTs, toTs) {
               + `&resolution=${resolution}`
               + `&from=${fromTs}&to=${toTs}`
               + `&token=${TOKEN}`;
+
+    console.log(`[API] Fetching ${sym} @ ${resolution}…`, url);
+
     try {
         const resp = await fetch(url);
-        const d    = await resp.json();
+        if (!resp.ok) {
+            console.error(`[API] HTTP ${resp.status} for ${sym}`);
+            return null;  // null = error (distinto de [] = no data)
+        }
+        const d = await resp.json();
+        console.log(`[API] ${sym}: status="${d.s}", points=${d.t?.length ?? 0}`);
         if (d.s !== 'ok') return [];
         return d.t.map((t, i) => ({ time: t, open: d.o[i], high: d.h[i], low: d.l[i], close: d.c[i] }));
     } catch (e) {
-        console.error(`[API] ${sym}:`, e.message);
-        return [];
+        console.error(`[API] fetch error for ${sym}:`, e.message);
+        return null;  // null = error de red / CORS
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CAPA DE GRÁFICOS — Lightweight Charts
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// LIGHTWEIGHT CHARTS — configuración común
+// ═══════════════════════════════════════════════════════════════════════════
+const CHART_OPTS = {
+    autoSize: true,
+    layout: {
+        background: { type: 'solid', color: '#161b22' },
+        textColor: '#e6edf3',
+    },
+    grid: {
+        vertLines: { color: '#21262d' },
+        horzLines: { color: '#21262d' },
+    },
+    rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.08, bottom: 0.05 } },
+    timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
+    crosshair: { mode: 1 },
+};
+const CANDLE_STYLE = {
+    upColor:'#3fb950', downColor:'#f85149',
+    borderUpColor:'#3fb950', borderDownColor:'#f85149',
+    wickUpColor:'#3fb950', wickDownColor:'#f85149',
+};
 
-// Estado de los mini charts de mercado: { jp: {chart, series, lastBar}, … }
-const mktState = {};
-
-// Estado del gráfico grande del watchlist
-let wlChart = null, wlSeries = null, wlLastBar = null;
-
-// Crea un gráfico con el tema oscuro. extraOpts sobreescribe CHART_BASE.
-function makeChart(container, extraOpts = {}) {
-    const opts = {
-        ...CHART_BASE,
-        ...extraOpts,
-        timeScale: { ...CHART_BASE.timeScale, ...(extraOpts.timeScale || {}) },
-    };
-    return LightweightCharts.createChart(container, opts);
+function makeChart(container) {
+    return LightweightCharts.createChart(container, CHART_OPTS);
 }
 
-// Carga el mini chart de un mercado (velas de 30 min, últimos 7 días)
-async function loadMarketChart(mkt) {
-    const container = document.getElementById(`chart-${mkt.id}`);
-    if (!container) return;
-
-    // Mini chart: ocultamos el eje de tiempo para ahorrar espacio
-    const chart  = makeChart(container, { timeScale: { visible: false } });
-    const series = chart.addCandlestickSeries(CANDLE_COLORS);
-
-    const from    = nowSec() - 7 * 86400;
-    const candles = await fetchCandles(mkt.sym, 'stock', 30, from, nowSec());
-
-    if (candles.length) {
-        series.setData(candles);
-        chart.timeScale().fitContent();
-        document.getElementById(`load-${mkt.id}`)?.remove();
-    } else {
-        const el = document.getElementById(`load-${mkt.id}`);
-        if (el) el.textContent = 'Sin datos';
-    }
-
-    mktState[mkt.id] = {
-        chart,
-        series,
-        lastBar: candles.length ? candles[candles.length - 1] : null,
-    };
-}
-
-// Inicializa el gráfico grande del watchlist (sin datos, se cargan después)
-function initWatchlistChart() {
-    const container = document.getElementById('wl-chart-inner');
-    wlChart  = makeChart(container);
-    wlSeries = wlChart.addCandlestickSeries(CANDLE_COLORS);
-}
-
-// Carga datos históricos en el gráfico del watchlist (velas diarias, 1 año)
-async function loadWatchlistData(asset) {
-    const candles = await fetchCandles(
-        asset.sym, asset.apiType, 'D',
-        nowSec() - 365 * 86400, nowSec()
-    );
-    if (!wlSeries || !candles.length) return;
-
-    wlSeries.setData(candles);
-    wlChart.timeScale().fitContent();
-    wlLastBar = candles[candles.length - 1];
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// REAL-TIME — Finnhub WebSocket
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// WEBSOCKET — Finnhub real-time
+// ═══════════════════════════════════════════════════════════════════════════
+// Un solo WebSocket para todos los símbolos.
+// Cada mensaje "trade" tiene: p (price), s (symbol), t (timestamp ms), v (volume)
 //
-// ¿Cómo funciona el tick aggregation?
-// -------------------------------------------------
-// El WebSocket entrega "trades" individuales: cada transacción tiene un precio
-// puntual y un timestamp en ms. Para actualizar una vela de 30 minutos:
-//
-//   1. Calcular a qué barra pertenece: floor(timestamp / (30 * 60 000)) * 30*60
-//   2. Si la barra ya existe (misma barTime) → actualizar solo H, L, C
-//   3. Si es un período nuevo → crear nueva barra con O=H=L=C=precio
-//
-// series.update(bar) es muy eficiente: solo re-renderiza la última vela,
-// no el gráfico completo. Por eso no hay parpadeo ni caída de rendimiento.
+// Tick aggregation: convertimos precios puntuales en velas OHLC.
+// Dado un tick con timestamp T y un intervalo de N minutos:
+//   barTime = floor(T_ms / (N*60*1000)) * N*60   ← en segundos
+// Si barTime == lastBar.time → actualizamos H, L, C de esa vela.
+// Si barTime > lastBar.time → nueva vela con O=H=L=C=precio.
+// series.update() solo re-dibuja la última barra (muy eficiente, sin parpadeo).
 
-let ws       = null;
-const wsSubs = new Set();   // símbolos activos en el WebSocket
+let ws = null;
+const wsSubs = new Set();
 
 function wsConnect() {
     ws = new WebSocket(`wss://ws.finnhub.io?token=${TOKEN}`);
 
     ws.onopen = () => {
-        document.getElementById('ws-status').textContent = '● live';
-        document.getElementById('ws-status').style.color = '#3fb950';
-        // Al reconectar, re-suscribir todos los símbolos previos
-        wsSubs.forEach(sym => ws.send(JSON.stringify({ type: 'subscribe', symbol: sym })));
+        const dot = document.getElementById('ws-dot');
+        dot.textContent = '● live'; dot.style.color = '#3fb950';
+        wsSubs.forEach(s => ws.send(JSON.stringify({ type:'subscribe', symbol:s })));
     };
 
     ws.onmessage = ({ data }) => {
         const msg = JSON.parse(data);
         if (msg.type !== 'trade') return;
-
-        for (const trade of msg.data) {
-            // trade = { p: price, s: symbol, t: timestamp_ms, v: volume }
-
-            // ── Actualiza mini charts de mercado
-            const mkt = MARKETS.find(m => m.sym === trade.s);
-            if (mkt && mktState[mkt.id]?.series) {
-                const st = mktState[mkt.id];
-                st.lastBar = applyTick(st.series, st.lastBar, trade, 30);
-            }
-
-            // ── Actualiza gráfico watchlist (activo seleccionado)
-            if (trade.s === wlActiveSym && wlSeries) {
-                wlLastBar = applyTick(wlSeries, wlLastBar, trade, 1440);   // 1440 min = 1 día
-            }
+        for (const t of msg.data) {
+            if (t.s === mkt.activeSym && mkt.series)
+                mkt.lastBar = applyTick(mkt.series, mkt.lastBar, t, TIMEFRAMES[mkt.tf].intervalMin);
+            if (t.s === wl.activeSym && wl.series)
+                wl.lastBar  = applyTick(wl.series,  wl.lastBar,  t, TIMEFRAMES[wl.tf].intervalMin);
         }
     };
 
     ws.onerror = () => {};
     ws.onclose = () => {
-        document.getElementById('ws-status').textContent = '○ reconectando…';
-        document.getElementById('ws-status').style.color = 'var(--muted)';
+        const dot = document.getElementById('ws-dot');
+        dot.textContent = '○ reconectando…'; dot.style.color = 'var(--muted)';
         setTimeout(wsConnect, 5000);
     };
 }
 
-function wsSubscribe(sym) {
+function wsSub(sym) {
     wsSubs.add(sym);
     if (ws?.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'subscribe', symbol: sym }));
+        ws.send(JSON.stringify({ type:'subscribe', symbol:sym }));
 }
-
-function wsUnsubscribe(sym) {
+function wsUnsub(sym) {
     wsSubs.delete(sym);
     if (ws?.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'unsubscribe', symbol: sym }));
+        ws.send(JSON.stringify({ type:'unsubscribe', symbol:sym }));
 }
 
-// Aplica un tick (precio puntual) a la última vela de la serie.
-// intervalMin: duración de la vela en minutos (30 para mini, 1440 para daily)
 function applyTick(series, lastBar, trade, intervalMin) {
-    const barTime = Math.floor(trade.t / 1000 / (intervalMin * 60)) * (intervalMin * 60);
+    const iSec = intervalMin * 60;
+    const barTime = Math.floor(trade.t / 1000 / iSec) * iSec;
 
     if (lastBar && lastBar.time === barTime) {
-        const updated = {
-            time:  barTime,
-            open:  lastBar.open,
-            high:  Math.max(lastBar.high, trade.p),
-            low:   Math.min(lastBar.low,  trade.p),
-            close: trade.p,
-        };
-        series.update(updated);
-        return updated;
+        const u = { time:barTime, open:lastBar.open,
+                    high:Math.max(lastBar.high, trade.p),
+                    low: Math.min(lastBar.low,  trade.p),
+                    close:trade.p };
+        series.update(u);
+        return u;
     }
-
-    // Nuevo período: crear barra con O=H=L=C=primer_precio
     if (!lastBar || barTime > lastBar.time) {
-        const bar = { time: barTime, open: trade.p, high: trade.p, low: trade.p, close: trade.p };
-        series.update(bar);
-        return bar;
+        const b = { time:barTime, open:trade.p, high:trade.p, low:trade.p, close:trade.p };
+        series.update(b);
+        return b;
     }
-
-    return lastBar;   // tick más viejo que la última barra → ignorar
+    return lastBar;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// WATCHLIST — chips y selección de activo
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// CHART CONTEXT — estado de cada gráfico (mercado y watchlist)
+// ═══════════════════════════════════════════════════════════════════════════
 
-let activeAssetId = 'gold';
-let wlActiveSym   = null;
+// Contexto del gráfico de Mercados
+const mkt = {
+    activeId:  'us',
+    activeSym: 'SPY',
+    apiType:   'stock',
+    tf:        '1m',
+    chart:     null,
+    series:    null,
+    lastBar:   null,
+};
 
-function buildChips() {
-    const bar = document.getElementById('chips-bar');
-    for (const a of ASSETS) {
-        const btn = document.createElement('button');
-        btn.className = `chip ${a.cls}${a.id === activeAssetId ? ' active' : ''}`;
-        btn.id = `chip-${a.id}`;
-        btn.innerHTML = `
-            <span class="chip-icon">${a.icon}</span>
-            <span class="chip-info">
-                <span class="chip-name">${a.name}</span>
-                <span class="chip-sub">${a.sub}</span>
-            </span>`;
-        btn.addEventListener('click', () => selectAsset(a.id));
-        bar.appendChild(btn);
+// Contexto del gráfico de Watchlist
+const wl = {
+    activeId:  'btc',
+    activeSym: 'BINANCE:BTCUSDT',
+    apiType:   'crypto',
+    tf:        '1m',
+    chart:     null,
+    series:    null,
+    lastBar:   null,
+};
+
+// ── Overlay helpers ───────────────────────────────────────────────────────
+function showOverlay(id, msg, isError = false) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = isError
+        ? `<span class="err-icon">⚠️</span><span>${msg}</span><span class="err-msg">Si estás en file://, sube el archivo a GitHub Pages.</span>`
+        : `<span class="err-icon">📈</span><span>${msg}</span>`;
+    el.classList.remove('hidden');
+}
+function hideOverlay(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+}
+
+// ── Carga datos y actualiza un gráfico ───────────────────────────────────
+// ctx: objeto mkt o wl
+// overlayId: id del div overlay
+async function loadChart(ctx, overlayId) {
+    const tf = TIMEFRAMES[ctx.tf];
+    const from = nowSec() - tf.fromDays * 86400;
+    showOverlay(overlayId, 'Cargando datos…');
+
+    const candles = await fetchCandles(ctx.activeSym, ctx.apiType, tf.res, from, nowSec());
+
+    if (candles === null) {
+        showOverlay(overlayId, 'Error al cargar datos', true);
+        return;
     }
-}
-
-async function selectAsset(id) {
-    const asset = ASSETS.find(a => a.id === id);
-    if (!asset || id === activeAssetId) return;
-
-    document.getElementById(`chip-${activeAssetId}`)?.classList.remove('active');
-    activeAssetId = id;
-    document.getElementById(`chip-${id}`)?.classList.add('active');
-
-    // Rotar suscripción WebSocket al nuevo símbolo
-    if (wlActiveSym) wsUnsubscribe(wlActiveSym);
-    wlActiveSym = asset.sym;
-    wsSubscribe(wlActiveSym);
-
-    await loadWatchlistData(asset);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MARKET TIMERS
-// ═══════════════════════════════════════════════════════════════════════════════
-// Sin cambios respecto a la versión original.
-// Usa Intl.DateTimeFormat para obtener la hora local del mercado, lo que maneja
-// el horario de verano (DST) automáticamente sin calcular offsets UTC a mano.
-
-function clock(tz) {
-    const parts = Object.fromEntries(
-        new Intl.DateTimeFormat('en-US', {
-            timeZone: tz,
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-            weekday: 'short', hour12: false,
-        }).formatToParts(new Date()).map(p => [p.type, p.value])
-    );
-    const h = +parts.hour, m = +parts.minute, s = +parts.second;
-    return { h, m, s, totalSec: h*3600 + m*60 + s, weekday: parts.weekday };
-}
-
-function hms(sec) {
-    if (sec < 0) sec = 0;
-    return [Math.floor(sec/3600), Math.floor(sec%3600/60), sec%60]
-        .map(n => String(n).padStart(2, '0')).join(':');
-}
-
-function setMarketState(id, state, sec, label) {
-    const map = {
-        open:   { bc:'b-open',   tc:'t-open',   bt:'Abierto'  },
-        closed: { bc:'b-closed', tc:'t-closed', bt:'Cerrado'  },
-        lunch:  { bc:'b-lunch',  tc:'t-lunch',  bt:'Almuerzo' },
-    };
-    const s = map[state];
-    const badge = document.getElementById(`${id}-badge`);
-    const timer = document.getElementById(`${id}-timer`);
-    const lbl   = document.getElementById(`${id}-label`);
-    if (badge) { badge.className = `badge ${s.bc}`; badge.textContent = s.bt; }
-    if (timer) { timer.className = `tclock ${s.tc}`; timer.textContent = hms(sec); }
-    if (lbl)   { lbl.textContent = label; }
-}
-
-function updateMarket(mkt) {
-    const t = clock(mkt.tz);
-    const local = document.getElementById(`${mkt.id}-local`);
-    if (local) local.textContent = [t.h, t.m, t.s].map(n => String(n).padStart(2,'0')).join(':');
-
-    if (t.weekday === 'Sat' || t.weekday === 'Sun') {
-        const days = t.weekday === 'Sat' ? 2 : 1;
-        const sec  = (86400 - t.totalSec) + (days - 1)*86400 + mkt.sessions[0].open * 60;
-        setMarketState(mkt.id, 'closed', sec, 'Abre el Lunes en');
+    if (candles.length === 0) {
+        showOverlay(overlayId, 'Sin datos para el período seleccionado');
         return;
     }
 
-    if (mkt.sessions.length > 1) {
-        const [s1, s2] = mkt.sessions;
-        if (t.totalSec >= s1.close*60 && t.totalSec < s2.open*60) {
-            setMarketState(mkt.id, 'lunch', s2.open*60 - t.totalSec, 'Almuerzo – reabre en');
-            return;
-        }
-    }
-
-    for (const s of mkt.sessions) {
-        if (t.totalSec >= s.open*60 && t.totalSec < s.close*60) {
-            setMarketState(mkt.id, 'open', s.close*60 - t.totalSec, 'Cierra en');
-            return;
-        }
-    }
-
-    for (const s of mkt.sessions) {
-        if (s.open*60 > t.totalSec) {
-            setMarketState(mkt.id, 'closed', s.open*60 - t.totalSec, 'Abre en');
-            return;
-        }
-    }
-
-    setMarketState(mkt.id, 'closed', (86400 - t.totalSec) + mkt.sessions[0].open*60, 'Abre mañana en');
+    ctx.series.setData(candles);
+    ctx.chart.timeScale().fitContent();
+    ctx.lastBar = candles[candles.length - 1];
+    hideOverlay(overlayId);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SELECTOR BUTTONS — construcción y eventos
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildSelectors(containerId, items, ctx, overlayId, idField, symField, apiTypeField) {
+    const container = document.getElementById(containerId);
+    items.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = `sel-btn ${item.cls}${item[idField] === ctx.activeId ? ' active' : ''}`;
+        btn.id = `sel-${containerId}-${item[idField]}`;
+        btn.innerHTML = item.icon
+            ? `<span>${item.icon}</span><span>${item.name}</span>`
+            : `<span class="sflag">${item.flag}</span><span>${item.name}</span>`;
+        btn.addEventListener('click', async () => {
+            if (item[idField] === ctx.activeId) return;
+            // Cambiar activo
+            document.getElementById(`sel-${containerId}-${ctx.activeId}`)?.classList.remove('active');
+            btn.classList.add('active');
+            wsUnsub(ctx.activeSym);
+            ctx.activeId  = item[idField];
+            ctx.activeSym = item[symField];
+            ctx.apiType   = item[apiTypeField];
+            wsSub(ctx.activeSym);
+            await loadChart(ctx, overlayId);
+        });
+        container.appendChild(btn);
+    });
+}
+
+function buildTfButtons(containerId, ctx, overlayId) {
+    const container = document.getElementById(containerId);
+    Object.keys(TIMEFRAMES).forEach(tf => {
+        const btn = document.createElement('button');
+        btn.className = `tf-btn${tf === ctx.tf ? ' active' : ''}`;
+        btn.textContent = tf;
+        btn.id = `tf-${containerId}-${tf}`;
+        btn.addEventListener('click', async () => {
+            if (tf === ctx.tf) return;
+            document.getElementById(`tf-${containerId}-${ctx.tf}`)?.classList.remove('active');
+            btn.classList.add('active');
+            ctx.tf = tf;
+            await loadChart(ctx, overlayId);
+        });
+        container.appendChild(btn);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MARKET TIMERS
+// ═══════════════════════════════════════════════════════════════════════════
+function clock(tz) {
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-US', {
+            timeZone:tz, hour:'2-digit', minute:'2-digit', second:'2-digit',
+            weekday:'short', hour12:false,
+        }).formatToParts(new Date()).map(p => [p.type, p.value])
+    );
+    const h = +parts.hour, m = +parts.minute, s = +parts.second;
+    return { h, m, s, totalSec: h*3600+m*60+s, weekday: parts.weekday };
+}
+function hms(sec) {
+    if (sec < 0) sec = 0;
+    return [Math.floor(sec/3600), Math.floor(sec%3600/60), sec%60]
+        .map(n => String(n).padStart(2,'0')).join(':');
+}
+function setTimerState(id, state, sec, label) {
+    const cfg = { open:{bc:'b-open',tc:'t-open',bt:'Abierto'}, closed:{bc:'b-closed',tc:'t-closed',bt:'Cerrado'}, lunch:{bc:'b-lunch',tc:'t-lunch',bt:'Almuerzo'} }[state];
+    const badge = document.getElementById(`${id}-badge`);
+    const timer = document.getElementById(`${id}-timer`);
+    const lbl   = document.getElementById(`${id}-label`);
+    if (badge){ badge.className=`badge ${cfg.bc}`; badge.textContent=cfg.bt; }
+    if (timer){ timer.className=`tclock ${cfg.tc}`; timer.textContent=hms(sec); }
+    if (lbl)  { lbl.textContent=label; }
+}
+function updateMarket(m) {
+    const t = clock(m.tz);
+    const loc = document.getElementById(`${m.id}-local`);
+    if (loc) loc.textContent = [t.h,t.m,t.s].map(n=>String(n).padStart(2,'0')).join(':');
+
+    if (t.weekday==='Sat'||t.weekday==='Sun') {
+        const days = t.weekday==='Sat' ? 2 : 1;
+        setTimerState(m.id,'closed',(86400-t.totalSec)+(days-1)*86400+m.sessions[0].open*60,'Abre el Lunes en');
+        return;
+    }
+    if (m.sessions.length>1) {
+        const[s1,s2]=m.sessions;
+        if (t.totalSec>=s1.close*60 && t.totalSec<s2.open*60){
+            setTimerState(m.id,'lunch',s2.open*60-t.totalSec,'Almuerzo – reabre en'); return;
+        }
+    }
+    for (const s of m.sessions) {
+        if (t.totalSec>=s.open*60 && t.totalSec<s.close*60){
+            setTimerState(m.id,'open',s.close*60-t.totalSec,'Cierra en'); return;
+        }
+    }
+    for (const s of m.sessions) {
+        if (s.open*60>t.totalSec){ setTimerState(m.id,'closed',s.open*60-t.totalSec,'Abre en'); return; }
+    }
+    setTimerState(m.id,'closed',(86400-t.totalSec)+m.sessions[0].open*60,'Abre mañana en');
+}
 function tick() {
     const n = new Date();
     document.getElementById('utc-clock').textContent =
-        `UTC  ${[n.getUTCHours(), n.getUTCMinutes(), n.getUTCSeconds()]
-            .map(v => String(v).padStart(2,'0')).join(':')}`;
+        `UTC  ${[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()].map(v=>String(v).padStart(2,'0')).join(':')}`;
     MARKETS.forEach(m => updateMarket(m));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 // BOOTSTRAP
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════════════════════
 async function init() {
-    // 1. Chips del watchlist
-    buildChips();
-
-    // 2. Gráfico grande (vacío, espera datos)
-    initWatchlistChart();
-
-    // 3. WebSocket — conectar en background (no bloquea)
-    wsConnect();
-
-    // 4. Cargar mini charts + suscribir WebSocket
-    //    Escalonamos 400ms entre llamadas REST (rate limit: 60 req/min)
-    for (const mkt of MARKETS) {
-        wsSubscribe(mkt.sym);
-        await loadMarketChart(mkt);
-        await sleep(400);
-    }
-
-    // 5. Cargar watchlist inicial (Oro / GLD)
-    const first = ASSETS.find(a => a.id === activeAssetId);
-    wlActiveSym = first.sym;
-    wsSubscribe(wlActiveSym);
-    await loadWatchlistData(first);
-
-    // 6. Timers de mercado (tick cada segundo)
+    // 1. Timers
     tick();
     setInterval(tick, 1000);
+
+    // 2. Crear ambos gráficos Lightweight Charts (contenedores ya existen en DOM)
+    mkt.chart  = makeChart(document.getElementById('mkt-chart-inner'));
+    mkt.series = mkt.chart.addCandlestickSeries(CANDLE_STYLE);
+
+    wl.chart  = makeChart(document.getElementById('wl-chart-inner'));
+    wl.series = wl.chart.addCandlestickSeries(CANDLE_STYLE);
+
+    // 3. Construir botones selectores y timeframe
+    //    buildSelectors(containerId, items, ctx, overlayId, idField, symField, apiTypeField)
+    buildSelectors('mkt-selectors', MARKETS, mkt, 'mkt-overlay', 'id', 'sym', '_stock');
+    buildTfButtons('mkt-tf', mkt, 'mkt-overlay');
+
+    buildSelectors('wl-selectors',  ASSETS,  wl,  'wl-overlay',  'id', 'sym', 'apiType');
+    buildTfButtons('wl-tf',  wl,  'wl-overlay');
+
+    // 4. Conectar WebSocket
+    wsConnect();
+
+    // 5. Suscribir ambos símbolos iniciales
+    wsSub(mkt.activeSym);
+    wsSub(wl.activeSym);
+
+    // 6. Cargar datos (escalonados para respetar rate limit de Finnhub: 60 req/min)
+    await loadChart(mkt, 'mkt-overlay');
+    await sleep(500);
+    await loadChart(wl, 'wl-overlay');
 }
+
+// Parche: el campo apiType de MARKETS es siempre 'stock', lo mockeamos
+MARKETS.forEach(m => m._stock = 'stock');
 
 init();
 </script>
