@@ -1,696 +1,388 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Market Dashboard</title>
-    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-    <style>
-        :root {
-            --bg:     #0d1117;
-            --card:   #161b22;
-            --card2:  #1c2128;
-            --border: #30363d;
-            --txt:    #e6edf3;
-            --muted:  #8b949e;
-            --green:  #3fb950;
-            --red:    #f85149;
-            --yellow: #d29922;
-            --blue:   #58a6ff;
-        }
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--txt); min-height:100vh; }
-
-        /* ── Header ─────────────────────────────────────────── */
-        header {
-            padding: 11px 24px;
-            background: var(--card);
-            border-bottom: 1px solid var(--border);
-            display: flex; align-items: center; gap: 10px;
-            position: sticky; top:0; z-index:200;
-        }
-        .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
-        @keyframes pulse {
-            0%,100%{ opacity:1; box-shadow:0 0 0 0 rgba(63,185,80,.5); }
-            50%    { opacity:.6; box-shadow:0 0 0 5px rgba(63,185,80,0); }
-        }
-        header h1    { font-size:16px; font-weight:700; }
-        #ws-dot      { font-size:11px; color:var(--muted); }
-        #utc-clock   { margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-
-        /* ── File:// warning ─────────────────────────────────── */
-        #local-warn {
-            display:none;
-            background:rgba(210,153,34,.12); border-bottom:1px solid rgba(210,153,34,.3);
-            padding:8px 24px; font-size:12px; color:var(--yellow);
-        }
-
-        /* ── Page ────────────────────────────────────────────── */
-        .container { padding:20px 24px; max-width:1800px; margin:0 auto; display:flex; flex-direction:column; gap:20px; }
-
-        /* ── Timer Row ───────────────────────────────────────── */
-        .timers-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-
-        .tcard {
-            background:var(--card); border:1px solid var(--border); border-radius:12px;
-            padding:14px 18px;
-            display:grid;
-            grid-template-columns: auto 1px 1fr 1px auto;
-            align-items:center; gap:16px;
-        }
-        .tcard-flag-name { display:flex; align-items:center; gap:10px; }
-        .tcard-flag      { font-size:22px; line-height:1; }
-        .tcard-name      { font-size:13px; font-weight:700; line-height:1.3; }
-        .tcard-sub       { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
-        .tcard-sep       { width:1px; height:36px; background:var(--border); }
-        .tcard-mid       { display:flex; flex-direction:column; gap:3px; }
-        .tcard-mid .tlabel { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
-        .tcard-mid .tclock { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:2px; }
-        .tcard-right     { display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
-        .tcard-right .tcity   { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
-        .tcard-right .tlocal  { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
-
-        .badge { padding:2px 10px; border-radius:20px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
-        .b-open   { background:rgba(63,185,80,.15);  color:var(--green);  border:1px solid rgba(63,185,80,.3);  }
-        .b-closed { background:rgba(248,81,73,.15);  color:var(--red);    border:1px solid rgba(248,81,73,.3);  }
-        .b-lunch  { background:rgba(210,153,34,.15); color:var(--yellow); border:1px solid rgba(210,153,34,.3); }
-        .t-open   { color:var(--green); }
-        .t-closed { color:var(--red);   }
-        .t-lunch  { color:var(--yellow);}
-
-        /* ── Chart Sections ─────────────────────────────────── */
-        .chart-section {
-            background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden;
-        }
-        .chart-head {
-            padding:12px 16px;
-            border-bottom:1px solid var(--border);
-            display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-        }
-        .chart-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin-right:4px; }
-
-        /* Selector buttons (mercados y activos) */
-        .sel-btn {
-            display:flex; align-items:center; gap:6px;
-            padding:6px 14px; border-radius:8px;
-            border:1px solid var(--border); background:var(--card2);
-            cursor:pointer; transition:all .15s; white-space:nowrap; user-select:none;
-            font-size:12px; font-weight:600; color:var(--txt);
-        }
-        .sel-btn:hover  { border-color:var(--blue); background:rgba(88,166,255,.07); }
-        .sel-btn.active { border-color:var(--blue); background:rgba(88,166,255,.13); }
-        .sel-btn .sflag { font-size:15px; line-height:1; }
-
-        /* Colored left border per asset */
-        .sel-btn { border-left-width:3px; }
-        .sc-jp   { border-left-color:#ff6b6b; }  .sc-jp.active  { background:rgba(255,107,107,.08); border-color:#ff6b6b; }
-        .sc-uk   { border-left-color:#4d9fff; }  .sc-uk.active  { background:rgba(77,159,255,.08);  border-color:#4d9fff; }
-        .sc-us   { border-left-color:#50fa7b; }  .sc-us.active  { background:rgba(80,250,123,.08);  border-color:#50fa7b; }
-        .sc-gold { border-left-color:#f7b731; }  .sc-gold.active{ background:rgba(247,183,49,.1);   border-color:#f7b731; }
-        .sc-oil  { border-left-color:#a55c1b; }  .sc-oil.active { background:rgba(165,92,27,.12);   border-color:#a55c1b; }
-        .sc-btc  { border-left-color:#f7921a; }  .sc-btc.active { background:rgba(247,146,26,.1);   border-color:#f7921a; }
-        .sc-nvda { border-left-color:#76e85a; }  .sc-nvda.active{ background:rgba(118,232,90,.08);  border-color:#76e85a; }
-        .sc-tsm  { border-left-color:#29b6f6; }  .sc-tsm.active { background:rgba(41,182,246,.1);   border-color:#29b6f6; }
-        .sc-tsla { border-left-color:#e84142; }  .sc-tsla.active{ background:rgba(232,65,66,.1);    border-color:#e84142; }
-
-        /* Timeframe buttons */
-        .tf-group { display:flex; gap:4px; margin-left:auto; }
-        .tf-btn {
-            padding:5px 11px; border-radius:6px;
-            border:1px solid var(--border); background:transparent;
-            color:var(--muted); font-size:11px; font-weight:700;
-            cursor:pointer; transition:all .15s;
-        }
-        .tf-btn:hover  { border-color:var(--blue); color:var(--txt); }
-        .tf-btn.active { border-color:var(--blue); background:rgba(88,166,255,.12); color:var(--blue); }
-
-        /* Chart body */
-        .chart-body { position:relative; height:460px; }
-        #wl-chart-body { height:510px; }
-
-        .chart-inner {
-            position:absolute; inset:0;
-        }
-        .chart-overlay {
-            position:absolute; inset:0;
-            display:flex; flex-direction:column; align-items:center; justify-content:center;
-            gap:8px; font-size:13px; color:var(--muted);
-            background:var(--card);
-            z-index:10;
-        }
-        .chart-overlay.hidden { display:none; }
-        .chart-overlay .err-icon { font-size:28px; }
-        .chart-overlay .err-msg  { font-size:12px; color:var(--muted); max-width:320px; text-align:center; line-height:1.5; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Dashboard</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--card2:#1c2128;--border:#30363d;--txt:#e6edf3;--muted:#8b949e;--green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+header{padding:11px 24px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:200}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(63,185,80,.5)}50%{opacity:.6;box-shadow:0 0 0 5px rgba(63,185,80,0)}}
+header h1{font-size:16px;font-weight:700}
+#ws-dot{font-size:11px;color:var(--muted)}
+#utc-clock{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.container{padding:20px 24px;max-width:1800px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.timers-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.tcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;display:grid;grid-template-columns:auto 1px 1fr 1px auto;align-items:center;gap:16px}
+.tcard-flag-name{display:flex;align-items:center;gap:10px}
+.tcard-flag{font-size:22px;line-height:1}
+.tcard-name{font-size:13px;font-weight:700;line-height:1.3}
+.tcard-sep{width:1px;height:36px;background:var(--border)}
+.tcard-mid{display:flex;flex-direction:column;gap:3px}
+.tcard-mid .tlabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.tcard-mid .tclock{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:2px}
+.tcard-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.tcard-right .tcity{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.tcard-right .tlocal{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.badge{padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.b-open{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+.b-closed{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+.b-lunch{background:rgba(210,153,34,.15);color:var(--yellow);border:1px solid rgba(210,153,34,.3)}
+.t-open{color:var(--green)}.t-closed{color:var(--red)}.t-lunch{color:var(--yellow)}
+.chart-section{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.chart-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chart-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-right:4px}
+.sel-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card2);cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none;font-size:12px;font-weight:600;color:var(--txt)}
+.sel-btn:hover{border-color:var(--blue);background:rgba(88,166,255,.07)}
+.sel-btn.active{border-color:var(--blue);background:rgba(88,166,255,.13)}
+.sel-btn{border-left-width:3px}
+.sc-jp{border-left-color:#ff6b6b}.sc-jp.active{background:rgba(255,107,107,.08);border-color:#ff6b6b}
+.sc-uk{border-left-color:#4d9fff}.sc-uk.active{background:rgba(77,159,255,.08);border-color:#4d9fff}
+.sc-us{border-left-color:#50fa7b}.sc-us.active{background:rgba(80,250,123,.08);border-color:#50fa7b}
+.sc-gold{border-left-color:#f7b731}.sc-gold.active{background:rgba(247,183,49,.1);border-color:#f7b731}
+.sc-oil{border-left-color:#a55c1b}.sc-oil.active{background:rgba(165,92,27,.12);border-color:#a55c1b}
+.sc-btc{border-left-color:#f7921a}.sc-btc.active{background:rgba(247,146,26,.1);border-color:#f7921a}
+.sc-nvda{border-left-color:#76e85a}.sc-nvda.active{background:rgba(118,232,90,.08);border-color:#76e85a}
+.sc-tsm{border-left-color:#29b6f6}.sc-tsm.active{background:rgba(41,182,246,.1);border-color:#29b6f6}
+.sc-tsla{border-left-color:#e84142}.sc-tsla.active{background:rgba(232,65,66,.1);border-color:#e84142}
+.tf-group{display:flex;gap:4px;margin-left:auto}
+.tf-btn{padding:5px 11px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
+.tf-btn:hover{border-color:var(--blue);color:var(--txt)}
+.tf-btn.active{border-color:var(--blue);background:rgba(88,166,255,.12);color:var(--blue)}
+.chart-body{position:relative;height:460px}
+#wl-chart-body{height:510px}
+.chart-inner{position:absolute;inset:0}
+.chart-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--muted);background:var(--card);z-index:10}
+.chart-overlay.hidden{display:none}
+.err-icon{font-size:28px}
+.err-msg{font-size:12px;color:var(--muted);max-width:320px;text-align:center;line-height:1.5}
+</style>
 </head>
 <body>
-
-<!-- ── Header ──────────────────────────────────────────────────────── -->
 <header>
-    <div class="live-dot"></div>
-    <h1>Market Dashboard</h1>
-    <span id="ws-dot">conectando…</span>
-    <span id="utc-clock">UTC --:--:--</span>
+  <div class="live-dot"></div>
+  <h1>Market Dashboard</h1>
+  <span id="ws-dot">conectando…</span>
+  <span id="utc-clock">UTC --:--:--</span>
 </header>
+<div class="container">
+  <div class="timers-row">
+    <div class="tcard">
+      <div class="tcard-flag-name"><span class="tcard-flag">🇯🇵</span><div><div class="tcard-name">Nikkei 225</div><span class="badge b-closed" id="jp-badge">...</span></div></div>
+      <div class="tcard-sep"></div>
+      <div class="tcard-mid"><span class="tlabel" id="jp-label">Cargando</span><span class="tclock t-closed" id="jp-timer">--:--:--</span></div>
+      <div class="tcard-sep"></div>
+      <div class="tcard-right"><span class="tcity">Tokio</span><span class="tlocal" id="jp-local">--:--:--</span></div>
+    </div>
+    <div class="tcard">
+      <div class="tcard-flag-name"><span class="tcard-flag">🇬🇧</span><div><div class="tcard-name">FTSE 100</div><span class="badge b-closed" id="uk-badge">...</span></div></div>
+      <div class="tcard-sep"></div>
+      <div class="tcard-mid"><span class="tlabel" id="uk-label">Cargando</span><span class="tclock t-closed" id="uk-timer">--:--:--</span></div>
+      <div class="tcard-sep"></div>
+      <div class="tcard-right"><span class="tcity">Londres</span><span class="tlocal" id="uk-local">--:--:--</span></div>
+    </div>
+    <div class="tcard">
+      <div class="tcard-flag-name"><span class="tcard-flag">🇺🇸</span><div><div class="tcard-name">S&amp;P 500</div><span class="badge b-closed" id="us-badge">...</span></div></div>
+      <div class="tcard-sep"></div>
+      <div class="tcard-mid"><span class="tlabel" id="us-label">Cargando</span><span class="tclock t-closed" id="us-timer">--:--:--</span></div>
+      <div class="tcard-sep"></div>
+      <div class="tcard-right"><span class="tcity">Nueva York</span><span class="tlocal" id="us-local">--:--:--</span></div>
+    </div>
+  </div>
 
-<!-- ── file:// warning ──────────────────────────────────────────────── -->
-<div id="local-warn">
-    ⚠️ Estás abriendo el archivo localmente (<code>file://</code>).
-    El navegador puede bloquear las llamadas a la API por CORS.
-    <strong>Sube el archivo a GitHub Pages para que funcione correctamente.</strong>
+  <div class="chart-section">
+    <div class="chart-head">
+      <span class="chart-title">Mercados</span>
+      <div id="mkt-selectors"></div>
+      <div class="tf-group" id="mkt-tf"></div>
+    </div>
+    <div class="chart-body">
+      <div class="chart-inner" id="mkt-chart-inner"></div>
+      <div class="chart-overlay" id="mkt-overlay"><span class="err-icon">📈</span><span>Cargando datos…</span></div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-head">
+      <span class="chart-title">Watchlist</span>
+      <div id="wl-selectors"></div>
+      <div class="tf-group" id="wl-tf"></div>
+    </div>
+    <div class="chart-body" id="wl-chart-body">
+      <div class="chart-inner" id="wl-chart-inner"></div>
+      <div class="chart-overlay" id="wl-overlay"><span class="err-icon">📈</span><span>Cargando datos…</span></div>
+    </div>
+  </div>
 </div>
 
-<div class="container">
-
-    <!-- ══ TIMERS ══════════════════════════════════════════════════════ -->
-    <div class="timers-row">
-
-        <!-- JAPAN -->
-        <div class="tcard">
-            <div class="tcard-flag-name">
-                <span class="tcard-flag">🇯🇵</span>
-                <div>
-                    <div class="tcard-name">Nikkei 225</div>
-                    <span class="badge b-closed" id="jp-badge">...</span>
-                </div>
-            </div>
-            <div class="tcard-sep"></div>
-            <div class="tcard-mid">
-                <span class="tlabel" id="jp-label">Cargando</span>
-                <span class="tclock t-closed" id="jp-timer">--:--:--</span>
-            </div>
-            <div class="tcard-sep"></div>
-            <div class="tcard-right">
-                <span class="tcity">Tokio</span>
-                <span class="tlocal" id="jp-local">--:--:--</span>
-            </div>
-        </div>
-
-        <!-- UK -->
-        <div class="tcard">
-            <div class="tcard-flag-name">
-                <span class="tcard-flag">🇬🇧</span>
-                <div>
-                    <div class="tcard-name">FTSE 100</div>
-                    <span class="badge b-closed" id="uk-badge">...</span>
-                </div>
-            </div>
-            <div class="tcard-sep"></div>
-            <div class="tcard-mid">
-                <span class="tlabel" id="uk-label">Cargando</span>
-                <span class="tclock t-closed" id="uk-timer">--:--:--</span>
-            </div>
-            <div class="tcard-sep"></div>
-            <div class="tcard-right">
-                <span class="tcity">Londres</span>
-                <span class="tlocal" id="uk-local">--:--:--</span>
-            </div>
-        </div>
-
-        <!-- US -->
-        <div class="tcard">
-            <div class="tcard-flag-name">
-                <span class="tcard-flag">🇺🇸</span>
-                <div>
-                    <div class="tcard-name">S&amp;P 500</div>
-                    <span class="badge b-closed" id="us-badge">...</span>
-                </div>
-            </div>
-            <div class="tcard-sep"></div>
-            <div class="tcard-mid">
-                <span class="tlabel" id="us-label">Cargando</span>
-                <span class="tclock t-closed" id="us-timer">--:--:--</span>
-            </div>
-            <div class="tcard-sep"></div>
-            <div class="tcard-right">
-                <span class="tcity">Nueva York</span>
-                <span class="tlocal" id="us-local">--:--:--</span>
-            </div>
-        </div>
-
-    </div><!-- /timers-row -->
-
-    <!-- ══ MARKET CHART ════════════════════════════════════════════════ -->
-    <div class="chart-section">
-        <div class="chart-head">
-            <span class="chart-title">Mercados</span>
-            <div id="mkt-selectors"><!-- renderizado por JS --></div>
-            <div class="tf-group" id="mkt-tf"><!-- renderizado por JS --></div>
-        </div>
-        <div class="chart-body">
-            <div class="chart-inner" id="mkt-chart-inner"></div>
-            <div class="chart-overlay" id="mkt-overlay">
-                <span class="err-icon">📈</span>
-                <span>Cargando datos…</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- ══ WATCHLIST CHART ═════════════════════════════════════════════ -->
-    <div class="chart-section">
-        <div class="chart-head">
-            <span class="chart-title">Watchlist</span>
-            <div id="wl-selectors"><!-- renderizado por JS --></div>
-            <div class="tf-group" id="wl-tf"><!-- renderizado por JS --></div>
-        </div>
-        <div class="chart-body" id="wl-chart-body">
-            <div class="chart-inner" id="wl-chart-inner"></div>
-            <div class="chart-overlay" id="wl-overlay">
-                <span class="err-icon">📈</span>
-                <span>Cargando datos…</span>
-            </div>
-        </div>
-    </div>
-
-</div><!-- /container -->
-
-<!-- ══════════════════════════════════════════════════════════════════
-     JAVASCRIPT
-     ══════════════════════════════════════════════════════════════════ -->
 <script>
-// ═══════════════════════════════════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════════════════════════════════
-// ⚠️  Si ves "Error al cargar datos", abrí finnhub.io/dashboard y pegá tu token aquí.
-// Los tokens de Finnhub tienen EXACTAMENTE 20 caracteres alfanuméricos.
 const TOKEN = 'd7cg5tpr01qv03es8ap0';
 const nowSec = () => Math.floor(Date.now() / 1000);
 const sleep  = ms => new Promise(r => setTimeout(r, ms));
 
-// Mostrar aviso si se abre como file://
-if (location.protocol === 'file:') {
-    document.getElementById('local-warn').style.display = 'block';
-}
-
-// ── Timeframes disponibles ────────────────────────────────────────────────
-// resolution: string que usa la API de Finnhub
-// fromDays: cuántos días hacia atrás pedir (amplio para no perder días feriados)
-// intervalMin: duración de cada vela en minutos (para el tick aggregation del WS)
 const TIMEFRAMES = {
-    '1m':  { res: '1',  fromDays: 7,  intervalMin: 1   },
-    '5m':  { res: '5',  fromDays: 10, intervalMin: 5   },
-    '30m': { res: '30', fromDays: 20, intervalMin: 30  },
-    '1h':  { res: '60', fromDays: 40, intervalMin: 60  },
+  '1m':  { res:'1',  fromDays:7,  intervalMin:1  },
+  '5m':  { res:'5',  fromDays:10, intervalMin:5  },
+  '30m': { res:'30', fromDays:20, intervalMin:30 },
+  '1h':  { res:'60', fromDays:40, intervalMin:60 },
 };
 
-// ── Definición de mercados (para el timer Y el gráfico) ───────────────────
-// sym: ETF americano que replica el índice, disponible en Finnhub gratis
+// FIX: apiType ahora vive dentro de cada objeto MARKETS (antes usaba _stock como parche)
 const MARKETS = [
-    {
-        id:'jp', flag:'🇯🇵', name:'Nikkei',  sym:'EWJ', cls:'sc-jp',
-        tz:'Asia/Tokyo', city:'Tokio',
-        sessions:[{open:9*60,close:11*60+30},{open:12*60+30,close:15*60+30}],
-    },
-    {
-        id:'uk', flag:'🇬🇧', name:'FTSE',    sym:'EWU', cls:'sc-uk',
-        tz:'Europe/London', city:'Londres',
-        sessions:[{open:8*60,close:16*60+30}],
-    },
-    {
-        id:'us', flag:'🇺🇸', name:'S&P 500', sym:'SPY', cls:'sc-us',
-        tz:'America/New_York', city:'Nueva York',
-        sessions:[{open:9*60+30,close:16*60}],
-    },
+  { id:'jp', flag:'🇯🇵', name:'Nikkei',  sym:'EWJ', cls:'sc-jp', apiType:'stock',
+    tz:'Asia/Tokyo',      sessions:[{open:9*60,close:11*60+30},{open:12*60+30,close:15*60+30}] },
+  { id:'uk', flag:'🇬🇧', name:'FTSE',    sym:'EWU', cls:'sc-uk', apiType:'stock',
+    tz:'Europe/London',   sessions:[{open:8*60,close:16*60+30}] },
+  { id:'us', flag:'🇺🇸', name:'S&P 500', sym:'SPY', cls:'sc-us', apiType:'stock',
+    tz:'America/New_York',sessions:[{open:9*60+30,close:16*60}] },
 ];
 
-// ── Activos de la watchlist ───────────────────────────────────────────────
 const ASSETS = [
-    { id:'gold', sym:'GLD',             apiType:'stock',  name:'Oro',       icon:'🥇', cls:'sc-gold' },
-    { id:'oil',  sym:'USO',             apiType:'stock',  name:'Petróleo',  icon:'🛢️', cls:'sc-oil'  },
-    { id:'btc',  sym:'BINANCE:BTCUSDT', apiType:'crypto', name:'Bitcoin',   icon:'₿',  cls:'sc-btc'  },
-    { id:'nvda', sym:'NVDA',            apiType:'stock',  name:'NVIDIA',    icon:'🟢', cls:'sc-nvda' },
-    { id:'tsm',  sym:'TSM',             apiType:'stock',  name:'Taiwan Semi',icon:'🔵',cls:'sc-tsm'  },
-    { id:'tsla', sym:'TSLA',            apiType:'stock',  name:'Tesla',     icon:'⚡', cls:'sc-tsla' },
+  { id:'gold', sym:'GLD',             apiType:'stock',  name:'Oro',        icon:'🥇', cls:'sc-gold' },
+  { id:'oil',  sym:'USO',             apiType:'stock',  name:'Petróleo',   icon:'🛢️', cls:'sc-oil'  },
+  { id:'btc',  sym:'BINANCE:BTCUSDT', apiType:'crypto', name:'Bitcoin',    icon:'₿',  cls:'sc-btc'  },
+  { id:'nvda', sym:'NVDA',            apiType:'stock',  name:'NVIDIA',     icon:'🟢', cls:'sc-nvda' },
+  { id:'tsm',  sym:'TSM',             apiType:'stock',  name:'Taiwan Semi',icon:'🔵', cls:'sc-tsm'  },
+  { id:'tsla', sym:'TSLA',            apiType:'stock',  name:'Tesla',      icon:'⚡', cls:'sc-tsla' },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════
-// FINNHUB REST
-// ═══════════════════════════════════════════════════════════════════════════
-// Finnhub devuelve arrays paralelos: t(timestamps), o, h, l, c, v.
-// Los convertimos al formato de Lightweight Charts: {time, open, high, low, close}.
-// time debe ser Unix segundos — Finnhub ya lo da en ese formato para intraday.
-//
-// Manejo de errores: si falla el fetch (CORS en file://, red, etc) retorna []
-// y el overlay se queda visible con el mensaje de error para que el usuario sepa.
-
-// fetchCandles devuelve:
-//   { ok: true,  data: [{time,open,high,low,close}, …] }  → éxito con velas
-//   { ok: true,  data: [] }                               → sin datos para el período
-//   { ok: false, error: "mensaje" }                       → fallo de red o HTTP error
 async function fetchCandles(sym, apiType, resolution, fromTs, toTs) {
-    const ep = apiType === 'crypto' ? 'crypto/candle'
-             : apiType === 'forex'  ? 'forex/candle'
-             :                        'stock/candle';
-
-    const url = `https://finnhub.io/api/v1/${ep}`
-              + `?symbol=${encodeURIComponent(sym)}`
-              + `&resolution=${resolution}`
-              + `&from=${fromTs}&to=${toTs}`
-              + `&token=${TOKEN}`;
-
-    console.log(`[API] ${sym} @ ${resolution}`, url);
-
-    try {
-        const resp = await fetch(url);
-        const body = await resp.text();
-        let d;
-        try { d = JSON.parse(body); } catch { d = {}; }
-
-        if (!resp.ok) {
-            const msg = d.error || body.slice(0, 120) || `HTTP ${resp.status}`;
-            console.error(`[API] Error ${resp.status} for ${sym}:`, msg);
-            return { ok: false, error: `HTTP ${resp.status} — ${msg}` };
-        }
-
-        console.log(`[API] ${sym}: s="${d.s}", puntos=${d.t?.length ?? 0}`);
-
-        if (d.s !== 'ok') {
-            return { ok: true, data: [] };   // sin datos (feriado, fuera de horario, etc.)
-        }
-        const data = d.t.map((t, i) => ({ time: t, open: d.o[i], high: d.h[i], low: d.l[i], close: d.c[i] }));
-        return { ok: true, data };
-
-    } catch (e) {
-        console.error(`[API] fetch exception for ${sym}:`, e.message);
-        return { ok: false, error: `Red / CORS — ${e.message}` };
-    }
+  const ep = apiType === 'crypto' ? 'crypto/candle'
+           : apiType === 'forex'  ? 'forex/candle'
+           :                        'stock/candle';
+  const url = `https://finnhub.io/api/v1/${ep}?symbol=${encodeURIComponent(sym)}&resolution=${resolution}&from=${fromTs}&to=${toTs}&token=${TOKEN}`;
+  try {
+    const resp = await fetch(url);
+    const body = await resp.text();
+    let d; try { d = JSON.parse(body); } catch { d = {}; }
+    if (!resp.ok) return { ok:false, error:`HTTP ${resp.status} — ${d.error || body.slice(0,120)}` };
+    if (d.s !== 'ok') return { ok:true, data:[] };
+    const data = d.t.map((t,i) => ({ time:t, open:d.o[i], high:d.h[i], low:d.l[i], close:d.c[i] }));
+    return { ok:true, data };
+  } catch(e) {
+    return { ok:false, error:`Red/CORS — ${e.message}` };
+  }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// LIGHTWEIGHT CHARTS — configuración común
-// ═══════════════════════════════════════════════════════════════════════════
 const CHART_OPTS = {
-    autoSize: true,
-    layout: {
-        background: { type: 'solid', color: '#161b22' },
-        textColor: '#e6edf3',
-    },
-    grid: {
-        vertLines: { color: '#21262d' },
-        horzLines: { color: '#21262d' },
-    },
-    rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.08, bottom: 0.05 } },
-    timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
-    crosshair: { mode: 1 },
+  autoSize:true,
+  layout:{ background:{ type:'solid', color:'#161b22' }, textColor:'#e6edf3' },
+  grid:{ vertLines:{ color:'#21262d' }, horzLines:{ color:'#21262d' } },
+  rightPriceScale:{ borderColor:'#30363d', scaleMargins:{ top:0.08, bottom:0.05 } },
+  timeScale:{ borderColor:'#30363d', timeVisible:true, secondsVisible:false },
+  crosshair:{ mode:1 },
 };
 const CANDLE_STYLE = {
-    upColor:'#3fb950', downColor:'#f85149',
-    borderUpColor:'#3fb950', borderDownColor:'#f85149',
-    wickUpColor:'#3fb950', wickDownColor:'#f85149',
+  upColor:'#3fb950', downColor:'#f85149',
+  borderUpColor:'#3fb950', borderDownColor:'#f85149',
+  wickUpColor:'#3fb950', wickDownColor:'#f85149',
 };
-
-function makeChart(container) {
-    return LightweightCharts.createChart(container, CHART_OPTS);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// WEBSOCKET — Finnhub real-time
-// ═══════════════════════════════════════════════════════════════════════════
-// Un solo WebSocket para todos los símbolos.
-// Cada mensaje "trade" tiene: p (price), s (symbol), t (timestamp ms), v (volume)
-//
-// Tick aggregation: convertimos precios puntuales en velas OHLC.
-// Dado un tick con timestamp T y un intervalo de N minutos:
-//   barTime = floor(T_ms / (N*60*1000)) * N*60   ← en segundos
-// Si barTime == lastBar.time → actualizamos H, L, C de esa vela.
-// Si barTime > lastBar.time → nueva vela con O=H=L=C=precio.
-// series.update() solo re-dibuja la última barra (muy eficiente, sin parpadeo).
 
 let ws = null;
 const wsSubs = new Set();
 
 function wsConnect() {
-    ws = new WebSocket(`wss://ws.finnhub.io?token=${TOKEN}`);
-
-    ws.onopen = () => {
-        const dot = document.getElementById('ws-dot');
-        dot.textContent = '● live'; dot.style.color = '#3fb950';
-        wsSubs.forEach(s => ws.send(JSON.stringify({ type:'subscribe', symbol:s })));
-    };
-
-    ws.onmessage = ({ data }) => {
-        const msg = JSON.parse(data);
-        if (msg.type !== 'trade') return;
-        for (const t of msg.data) {
-            if (t.s === mkt.activeSym && mkt.series)
-                mkt.lastBar = applyTick(mkt.series, mkt.lastBar, t, TIMEFRAMES[mkt.tf].intervalMin);
-            if (t.s === wl.activeSym && wl.series)
-                wl.lastBar  = applyTick(wl.series,  wl.lastBar,  t, TIMEFRAMES[wl.tf].intervalMin);
-        }
-    };
-
-    ws.onerror = () => {};
-    ws.onclose = () => {
-        const dot = document.getElementById('ws-dot');
-        dot.textContent = '○ reconectando…'; dot.style.color = 'var(--muted)';
-        setTimeout(wsConnect, 5000);
-    };
+  ws = new WebSocket(`wss://ws.finnhub.io?token=${TOKEN}`);
+  ws.onopen = () => {
+    const dot = document.getElementById('ws-dot');
+    dot.textContent = '● live'; dot.style.color = '#3fb950';
+    wsSubs.forEach(s => ws.send(JSON.stringify({ type:'subscribe', symbol:s })));
+  };
+  ws.onmessage = ({ data }) => {
+    const msg = JSON.parse(data);
+    if (msg.type !== 'trade') return;
+    for (const t of msg.data) {
+      if (t.s === mkt.activeSym && mkt.series)
+        mkt.lastBar = applyTick(mkt.series, mkt.lastBar, t, TIMEFRAMES[mkt.tf].intervalMin);
+      if (t.s === wl.activeSym && wl.series)
+        wl.lastBar  = applyTick(wl.series,  wl.lastBar,  t, TIMEFRAMES[wl.tf].intervalMin);
+    }
+  };
+  ws.onerror = () => {};
+  ws.onclose = () => {
+    const dot = document.getElementById('ws-dot');
+    dot.textContent = '○ reconectando…'; dot.style.color = 'var(--muted)';
+    setTimeout(wsConnect, 5000);
+  };
 }
 
 function wsSub(sym) {
-    wsSubs.add(sym);
-    if (ws?.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type:'subscribe', symbol:sym }));
+  wsSubs.add(sym);
+  if (ws?.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ type:'subscribe', symbol:sym }));
 }
 function wsUnsub(sym) {
-    wsSubs.delete(sym);
-    if (ws?.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type:'unsubscribe', symbol:sym }));
+  wsSubs.delete(sym);
+  if (ws?.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ type:'unsubscribe', symbol:sym }));
 }
 
 function applyTick(series, lastBar, trade, intervalMin) {
-    const iSec = intervalMin * 60;
-    const barTime = Math.floor(trade.t / 1000 / iSec) * iSec;
-
-    if (lastBar && lastBar.time === barTime) {
-        const u = { time:barTime, open:lastBar.open,
-                    high:Math.max(lastBar.high, trade.p),
-                    low: Math.min(lastBar.low,  trade.p),
-                    close:trade.p };
-        series.update(u);
-        return u;
-    }
-    if (!lastBar || barTime > lastBar.time) {
-        const b = { time:barTime, open:trade.p, high:trade.p, low:trade.p, close:trade.p };
-        series.update(b);
-        return b;
-    }
-    return lastBar;
+  const iSec = intervalMin * 60;
+  const barTime = Math.floor(trade.t / 1000 / iSec) * iSec;
+  if (lastBar && lastBar.time === barTime) {
+    const u = { time:barTime, open:lastBar.open, high:Math.max(lastBar.high, trade.p), low:Math.min(lastBar.low, trade.p), close:trade.p };
+    series.update(u); return u;
+  }
+  if (!lastBar || barTime > lastBar.time) {
+    const b = { time:barTime, open:trade.p, high:trade.p, low:trade.p, close:trade.p };
+    series.update(b); return b;
+  }
+  return lastBar;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CHART CONTEXT — estado de cada gráfico (mercado y watchlist)
-// ═══════════════════════════════════════════════════════════════════════════
+const mkt = { activeId:'us', activeSym:'SPY', apiType:'stock', tf:'1m', chart:null, series:null, lastBar:null };
+const wl  = { activeId:'btc', activeSym:'BINANCE:BTCUSDT', apiType:'crypto', tf:'1m', chart:null, series:null, lastBar:null };
 
-// Contexto del gráfico de Mercados
-const mkt = {
-    activeId:  'us',
-    activeSym: 'SPY',
-    apiType:   'stock',
-    tf:        '1m',
-    chart:     null,
-    series:    null,
-    lastBar:   null,
-};
-
-// Contexto del gráfico de Watchlist
-const wl = {
-    activeId:  'btc',
-    activeSym: 'BINANCE:BTCUSDT',
-    apiType:   'crypto',
-    tf:        '1m',
-    chart:     null,
-    series:    null,
-    lastBar:   null,
-};
-
-// ── Overlay helpers ───────────────────────────────────────────────────────
-function showOverlay(id, msg, isError = false) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = isError
-        ? `<span class="err-icon">⚠️</span><span>${msg}</span><span class="err-msg">Si estás en file://, sube el archivo a GitHub Pages.</span>`
-        : `<span class="err-icon">📈</span><span>${msg}</span>`;
-    el.classList.remove('hidden');
+function showOverlay(id, msg, isError=false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = isError
+    ? `<span class="err-icon">⚠️</span><span>${msg}</span><span class="err-msg">Abrí F12 → Network para ver el detalle del error.</span>`
+    : `<span class="err-icon">📈</span><span>${msg}</span>`;
+  el.classList.remove('hidden');
 }
 function hideOverlay(id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('hidden');
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
 }
 
-// ── Carga datos y actualiza un gráfico ───────────────────────────────────
-// ctx: objeto mkt o wl
-// overlayId: id del div overlay
 async function loadChart(ctx, overlayId) {
-    const tf   = TIMEFRAMES[ctx.tf];
-    const from = nowSec() - tf.fromDays * 86400;
-    showOverlay(overlayId, `Cargando ${ctx.activeSym} @ ${ctx.tf}…`);
-
-    const result = await fetchCandles(ctx.activeSym, ctx.apiType, tf.res, from, nowSec());
-
-    if (!result.ok) {
-        // Error de red o HTTP — mostramos el mensaje exacto para poder diagnosticar
-        showOverlay(overlayId, `Error: ${result.error}`, true);
-        return;
-    }
-    if (result.data.length === 0) {
-        // La API respondió OK pero no hay velas para ese período
-        // (puede ser feriado, símbolo fuera de horario, o plan insuficiente)
-        showOverlay(overlayId, `Sin datos para ${ctx.activeSym} en los últimos ${tf.fromDays} días`);
-        return;
-    }
-
-    ctx.series.setData(result.data);
-    ctx.chart.timeScale().fitContent();
-    ctx.lastBar = result.data[result.data.length - 1];
-    hideOverlay(overlayId);
+  const tf   = TIMEFRAMES[ctx.tf];
+  const from = nowSec() - tf.fromDays * 86400;
+  showOverlay(overlayId, `Cargando ${ctx.activeSym} @ ${ctx.tf}…`);
+  const result = await fetchCandles(ctx.activeSym, ctx.apiType, tf.res, from, nowSec());
+  if (!result.ok)          { showOverlay(overlayId, `Error: ${result.error}`, true); return; }
+  if (!result.data.length) { showOverlay(overlayId, `Sin datos para ${ctx.activeSym} (${tf.fromDays} días)`); return; }
+  ctx.series.setData(result.data);
+  ctx.chart.timeScale().fitContent();
+  ctx.lastBar = result.data[result.data.length - 1];
+  hideOverlay(overlayId);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SELECTOR BUTTONS — construcción y eventos
-// ═══════════════════════════════════════════════════════════════════════════
-
-function buildSelectors(containerId, items, ctx, overlayId, idField, symField, apiTypeField) {
-    const container = document.getElementById(containerId);
-    items.forEach(item => {
-        const btn = document.createElement('button');
-        btn.className = `sel-btn ${item.cls}${item[idField] === ctx.activeId ? ' active' : ''}`;
-        btn.id = `sel-${containerId}-${item[idField]}`;
-        btn.innerHTML = item.icon
-            ? `<span>${item.icon}</span><span>${item.name}</span>`
-            : `<span class="sflag">${item.flag}</span><span>${item.name}</span>`;
-        btn.addEventListener('click', async () => {
-            if (item[idField] === ctx.activeId) return;
-            // Cambiar activo
-            document.getElementById(`sel-${containerId}-${ctx.activeId}`)?.classList.remove('active');
-            btn.classList.add('active');
-            wsUnsub(ctx.activeSym);
-            ctx.activeId  = item[idField];
-            ctx.activeSym = item[symField];
-            ctx.apiType   = item[apiTypeField];
-            wsSub(ctx.activeSym);
-            await loadChart(ctx, overlayId);
-        });
-        container.appendChild(btn);
+// FIX: función simplificada — lee item.apiType directamente, sin field lookup dinámico
+function buildSelectors(containerId, items, ctx, overlayId) {
+  const container = document.getElementById(containerId);
+  items.forEach(item => {
+    const btn = document.createElement('button');
+    btn.className = `sel-btn ${item.cls}${item.id === ctx.activeId ? ' active' : ''}`;
+    btn.id = `sel-${containerId}-${item.id}`;
+    btn.innerHTML = item.icon
+      ? `<span>${item.icon}</span><span>${item.name}</span>`
+      : `<span class="sflag">${item.flag}</span><span>${item.name}</span>`;
+    btn.addEventListener('click', async () => {
+      if (item.id === ctx.activeId) return;
+      document.getElementById(`sel-${containerId}-${ctx.activeId}`)?.classList.remove('active');
+      btn.classList.add('active');
+      wsUnsub(ctx.activeSym);
+      ctx.activeId  = item.id;
+      ctx.activeSym = item.sym;
+      ctx.apiType   = item.apiType;  // siempre definido, viene del objeto directamente
+      wsSub(ctx.activeSym);
+      await loadChart(ctx, overlayId);
     });
+    container.appendChild(btn);
+  });
 }
 
 function buildTfButtons(containerId, ctx, overlayId) {
-    const container = document.getElementById(containerId);
-    Object.keys(TIMEFRAMES).forEach(tf => {
-        const btn = document.createElement('button');
-        btn.className = `tf-btn${tf === ctx.tf ? ' active' : ''}`;
-        btn.textContent = tf;
-        btn.id = `tf-${containerId}-${tf}`;
-        btn.addEventListener('click', async () => {
-            if (tf === ctx.tf) return;
-            document.getElementById(`tf-${containerId}-${ctx.tf}`)?.classList.remove('active');
-            btn.classList.add('active');
-            ctx.tf = tf;
-            await loadChart(ctx, overlayId);
-        });
-        container.appendChild(btn);
+  const container = document.getElementById(containerId);
+  Object.keys(TIMEFRAMES).forEach(tf => {
+    const btn = document.createElement('button');
+    btn.className = `tf-btn${tf === ctx.tf ? ' active' : ''}`;
+    btn.textContent = tf;
+    btn.id = `tf-${containerId}-${tf}`;
+    btn.addEventListener('click', async () => {
+      if (tf === ctx.tf) return;
+      document.getElementById(`tf-${containerId}-${ctx.tf}`)?.classList.remove('active');
+      btn.classList.add('active');
+      ctx.tf = tf;
+      await loadChart(ctx, overlayId);
     });
+    container.appendChild(btn);
+  });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MARKET TIMERS
-// ═══════════════════════════════════════════════════════════════════════════
 function clock(tz) {
-    const parts = Object.fromEntries(
-        new Intl.DateTimeFormat('en-US', {
-            timeZone:tz, hour:'2-digit', minute:'2-digit', second:'2-digit',
-            weekday:'short', hour12:false,
-        }).formatToParts(new Date()).map(p => [p.type, p.value])
-    );
-    const h = +parts.hour, m = +parts.minute, s = +parts.second;
-    return { h, m, s, totalSec: h*3600+m*60+s, weekday: parts.weekday };
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US',{timeZone:tz,hour:'2-digit',minute:'2-digit',second:'2-digit',weekday:'short',hour12:false})
+    .formatToParts(new Date()).map(p => [p.type, p.value])
+  );
+  const h=+parts.hour, m=+parts.minute, s=+parts.second;
+  return { h, m, s, totalSec:h*3600+m*60+s, weekday:parts.weekday };
 }
 function hms(sec) {
-    if (sec < 0) sec = 0;
-    return [Math.floor(sec/3600), Math.floor(sec%3600/60), sec%60]
-        .map(n => String(n).padStart(2,'0')).join(':');
+  if (sec<0) sec=0;
+  return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(n=>String(n).padStart(2,'0')).join(':');
 }
 function setTimerState(id, state, sec, label) {
-    const cfg = { open:{bc:'b-open',tc:'t-open',bt:'Abierto'}, closed:{bc:'b-closed',tc:'t-closed',bt:'Cerrado'}, lunch:{bc:'b-lunch',tc:'t-lunch',bt:'Almuerzo'} }[state];
-    const badge = document.getElementById(`${id}-badge`);
-    const timer = document.getElementById(`${id}-timer`);
-    const lbl   = document.getElementById(`${id}-label`);
-    if (badge){ badge.className=`badge ${cfg.bc}`; badge.textContent=cfg.bt; }
-    if (timer){ timer.className=`tclock ${cfg.tc}`; timer.textContent=hms(sec); }
-    if (lbl)  { lbl.textContent=label; }
+  const cfg = {
+    open:  {bc:'b-open',  tc:'t-open',  bt:'Abierto' },
+    closed:{bc:'b-closed',tc:'t-closed',bt:'Cerrado'  },
+    lunch: {bc:'b-lunch', tc:'t-lunch', bt:'Almuerzo' },
+  }[state];
+  const badge=document.getElementById(`${id}-badge`);
+  const timer=document.getElementById(`${id}-timer`);
+  const lbl  =document.getElementById(`${id}-label`);
+  if (badge){ badge.className=`badge ${cfg.bc}`; badge.textContent=cfg.bt; }
+  if (timer){ timer.className=`tclock ${cfg.tc}`; timer.textContent=hms(sec); }
+  if (lbl)  { lbl.textContent=label; }
 }
 function updateMarket(m) {
-    const t = clock(m.tz);
-    const loc = document.getElementById(`${m.id}-local`);
-    if (loc) loc.textContent = [t.h,t.m,t.s].map(n=>String(n).padStart(2,'0')).join(':');
-
-    if (t.weekday==='Sat'||t.weekday==='Sun') {
-        const days = t.weekday==='Sat' ? 2 : 1;
-        setTimerState(m.id,'closed',(86400-t.totalSec)+(days-1)*86400+m.sessions[0].open*60,'Abre el Lunes en');
-        return;
+  const t = clock(m.tz);
+  const loc = document.getElementById(`${m.id}-local`);
+  if (loc) loc.textContent = [t.h,t.m,t.s].map(n=>String(n).padStart(2,'0')).join(':');
+  if (t.weekday==='Sat'||t.weekday==='Sun') {
+    const days = t.weekday==='Sat' ? 2 : 1;
+    setTimerState(m.id,'closed',(86400-t.totalSec)+(days-1)*86400+m.sessions[0].open*60,'Abre el Lunes en'); return;
+  }
+  if (m.sessions.length>1) {
+    const [s1,s2]=m.sessions;
+    if (t.totalSec>=s1.close*60 && t.totalSec<s2.open*60) {
+      setTimerState(m.id,'lunch',s2.open*60-t.totalSec,'Almuerzo – reabre en'); return;
     }
-    if (m.sessions.length>1) {
-        const[s1,s2]=m.sessions;
-        if (t.totalSec>=s1.close*60 && t.totalSec<s2.open*60){
-            setTimerState(m.id,'lunch',s2.open*60-t.totalSec,'Almuerzo – reabre en'); return;
-        }
-    }
-    for (const s of m.sessions) {
-        if (t.totalSec>=s.open*60 && t.totalSec<s.close*60){
-            setTimerState(m.id,'open',s.close*60-t.totalSec,'Cierra en'); return;
-        }
-    }
-    for (const s of m.sessions) {
-        if (s.open*60>t.totalSec){ setTimerState(m.id,'closed',s.open*60-t.totalSec,'Abre en'); return; }
-    }
-    setTimerState(m.id,'closed',(86400-t.totalSec)+m.sessions[0].open*60,'Abre mañana en');
+  }
+  for (const s of m.sessions) {
+    if (t.totalSec>=s.open*60 && t.totalSec<s.close*60) { setTimerState(m.id,'open',s.close*60-t.totalSec,'Cierra en'); return; }
+  }
+  for (const s of m.sessions) {
+    if (s.open*60>t.totalSec) { setTimerState(m.id,'closed',s.open*60-t.totalSec,'Abre en'); return; }
+  }
+  setTimerState(m.id,'closed',(86400-t.totalSec)+m.sessions[0].open*60,'Abre mañana en');
 }
 function tick() {
-    const n = new Date();
-    document.getElementById('utc-clock').textContent =
-        `UTC  ${[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()].map(v=>String(v).padStart(2,'0')).join(':')}`;
-    MARKETS.forEach(m => updateMarket(m));
+  const n = new Date();
+  document.getElementById('utc-clock').textContent =
+    `UTC  ${[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()].map(v=>String(v).padStart(2,'0')).join(':')}`;
+  MARKETS.forEach(m => updateMarket(m));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BOOTSTRAP
-// ═══════════════════════════════════════════════════════════════════════════
 async function init() {
-    // 1. Timers
-    tick();
-    setInterval(tick, 1000);
+  tick();
+  setInterval(tick, 1000);
 
-    // 2. Crear ambos gráficos Lightweight Charts (contenedores ya existen en DOM)
-    mkt.chart  = makeChart(document.getElementById('mkt-chart-inner'));
-    mkt.series = mkt.chart.addCandlestickSeries(CANDLE_STYLE);
+  mkt.chart  = LightweightCharts.createChart(document.getElementById('mkt-chart-inner'), CHART_OPTS);
+  mkt.series = mkt.chart.addCandlestickSeries(CANDLE_STYLE);
+  wl.chart   = LightweightCharts.createChart(document.getElementById('wl-chart-inner'), CHART_OPTS);
+  wl.series  = wl.chart.addCandlestickSeries(CANDLE_STYLE);
 
-    wl.chart  = makeChart(document.getElementById('wl-chart-inner'));
-    wl.series = wl.chart.addCandlestickSeries(CANDLE_STYLE);
+  buildSelectors('mkt-selectors', MARKETS, mkt, 'mkt-overlay');
+  buildTfButtons('mkt-tf', mkt, 'mkt-overlay');
+  buildSelectors('wl-selectors',  ASSETS,  wl,  'wl-overlay');
+  buildTfButtons('wl-tf',  wl,  'wl-overlay');
 
-    // 3. Construir botones selectores y timeframe
-    //    buildSelectors(containerId, items, ctx, overlayId, idField, symField, apiTypeField)
-    buildSelectors('mkt-selectors', MARKETS, mkt, 'mkt-overlay', 'id', 'sym', '_stock');
-    buildTfButtons('mkt-tf', mkt, 'mkt-overlay');
+  wsConnect();
+  wsSub(mkt.activeSym);
+  wsSub(wl.activeSym);
 
-    buildSelectors('wl-selectors',  ASSETS,  wl,  'wl-overlay',  'id', 'sym', 'apiType');
-    buildTfButtons('wl-tf',  wl,  'wl-overlay');
-
-    // 4. Conectar WebSocket
-    wsConnect();
-
-    // 5. Suscribir ambos símbolos iniciales
-    wsSub(mkt.activeSym);
-    wsSub(wl.activeSym);
-
-    // 6. Cargar datos (escalonados para respetar rate limit de Finnhub: 60 req/min)
-    await loadChart(mkt, 'mkt-overlay');
-    await sleep(500);
-    await loadChart(wl, 'wl-overlay');
+  await loadChart(mkt, 'mkt-overlay');
+  await sleep(500);
+  await loadChart(wl,  'wl-overlay');
 }
-
-// Parche: el campo apiType de MARKETS es siempre 'stock', lo mockeamos
-MARKETS.forEach(m => m._stock = 'stock');
 
 init();
 </script>
